@@ -1,0 +1,79 @@
+#!/bin/bash
+
+NAME="xnas"
+SERVICENAME="xservices"
+BINDSCRIPT="$NAME.service"
+SERVICESCRIPT="$SERVICENAME.service"
+SERVICEDIR="/etc/systemd/system"
+ETCDIR="/etc"
+USRDIR="/usr"
+OPTDIR="/opt"
+OPTLOC="$OPTDIR/$NAME"
+BINDIR="$USRDIR/bin"
+BASHRC1="$ETCDIR/bash.bashrc"
+BASHRC2="$ETCDIR/bashrc"
+XCDALIAS="alias xcd='. $OPTLOC/xcd.sh'"
+PY=".py"
+XDIR="xdir"
+PYXDIR="$OPTLOC/$XDIR$PY"
+BINXDIR="$BINDIR/$XDIR"
+XMOUNT="xmount"
+PYXMOUNT="$OPTLOC/$XMOUNT$PY"
+BINXMOUNT="$BINDIR/$XMOUNT"
+XNAS="xnas"
+PYXNAS="$OPTLOC/$XNAS$PY"
+BINXNAS="$BINDIR/$XNAS"
+XNET="xnetshare"
+PYXNET="$OPTLOC/$XNET$PY"
+BINXNET="$BINDIR/$XNET"
+XPD="xpd"
+PYXPD="$OPTLOC/$XPD$PY"
+BINXPD="$BINDIR/$XPD"
+XREM="xremotemount"
+PYXREM="$OPTLOC/$XREM$PY"
+BINXREM="$BINDIR/$XREM"
+XSRV="xservices"
+PYXSRV="$OPTLOC/$XSRV$PY"
+BINXSRV="$BINDIR/$XSRV"
+XSHR="xshare"
+PYXSHR="$OPTLOC/$XSHR$PY"
+BINXSHR="$BINDIR/$XSHR"
+
+echo "Installing binaries"
+ln -s $PYXDIR $BINXDIR
+ln -s $PYXMOUNT $BINXMOUNT
+ln -s $PYXNAS $BINXNAS
+ln -s $PYXNET $BINXNET
+ln -s $PYXPD $BINXPD
+ln -s $PYXREM $BINXREM
+ln -s $PYXSRV $BINXSRV
+ln -s $PYXSHR $BINXSHR
+
+# Add aliases
+echo "Adding alias for xcd in interactive shells"
+if [ -f $BASHRC1 ]; then
+    BASHRC=$BASHRC1
+elif [ -f $BASHRC2 ]; then
+    BASHRC=$BASHRC2
+else
+    BASHRC=
+    echo "bashrc doesn't exist, aliases not added"
+fi
+
+if [ -n $BASHRC ]; then
+    if ! grep -q "$XCDALIAS" $BASHRC; then
+        echo -e "$XCDALIAS\n" >> $BASHRC
+    fi
+fi
+
+echo "Install automatic startup service for $NAME"
+if [ -f "$SERVICEDIR/$BINDSCRIPT" ]; then
+    systemctl enable $BINDSCRIPT
+    systemctl start $BINDSCRIPT
+fi
+if [ -f "$SERVICEDIR/$SERVICESCRIPT" ]; then
+    systemctl enable $SERVICESCRIPT
+    systemctl start $SERVICESCRIPT
+fi
+
+exit 0

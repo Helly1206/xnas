@@ -1,0 +1,78 @@
+#!/bin/bash
+
+NAME="xnas"
+SERVICENAME="xservices"
+BINDSCRIPT="$NAME.service"
+SERVICESCRIPT="$SERVICENAME.service"
+SERVICEDIR="/etc/systemd/system"
+ETCDIR="/etc"
+USRDIR="/usr"
+OPTDIR="/opt"
+OPTLOC="$OPTDIR/$NAME"
+BINDIR="$USRDIR/bin"
+BASHRC1="$ETCDIR/bash.bashrc"
+BASHRC2="$ETCDIR/bashrc"
+XCDALIAS="alias xcd='. $OPTLOC/xcd.sh'"
+PY=".py"
+XDIR="xdir"
+BINXDIR="$BINDIR/$XDIR"
+XMOUNT="xmount"
+BINXMOUNT="$BINDIR/$XMOUNT"
+XNAS="xnas"
+BINXNAS="$BINDIR/$XNAS"
+XNET="xnetshare"
+BINXNET="$BINDIR/$XNET"
+XPD="xpd"
+BINXPD="$BINDIR/$XPD"
+XREM="xremotemount"
+BINXREM="$BINDIR/$XREM"
+XSRV="xservices"
+BINXSRV="$BINDIR/$XSRV"
+XSHR="xshare"
+BINXSHR="$BINDIR/$XSHR"
+
+echo "Uninstalling service $SERVICENAME"
+if [ -f "$SERVICEDIR/$SERVICESCRIPT" ]; then
+    systemctl stop $SERVICESCRIPT
+    systemctl disable $SERVICESCRIPT
+fi
+
+echo "Uninstalling service $NAME"
+if [ -f "$SERVICEDIR/$BINDSCRIPT" ]; then
+    systemctl stop $BINDSCRIPT
+    systemctl disable $BINDSCRIPT
+fi
+
+echo "Removing alias for xcd in interactive shells"
+if [ -f $BASHRC1 ]; then
+    BASHRC=$BASHRC1
+elif [ -f $BASHRC2 ]; then
+    BASHRC=$BASHRC2
+else
+    BASHRC=
+    echo "bashrc doesn't exist, aliases not removed"
+fi
+
+if [ -n $BASHRC ]; then
+    if grep -q "$XCDALIAS" $BASHRC; then
+        echo "$(grep -v "$XCDALIAS" $BASHRC)" > $BASHRC
+    fi
+fi
+
+# Remove links
+echo "Removing binaries"
+[ -L $BINXDIR ] && unlink $BINXDIR
+[ -L $BINXMOUNT ] && unlink $BINXMOUNT
+[ -L $BINXNAS ] && unlink $BINXNAS
+[ -L $BINXNET ] && unlink $BINXNET
+[ -L $BINXPD ] && unlink $BINXPD
+[ -L $BINXREM ] && unlink $BINXREM
+[ -L $BINXSRV ] && unlink $BINXSRV
+[ -L $BINXSHR ] && unlink $BINXSHR
+
+echo "Removing files"
+if [ -d "$OPTLOC" ]; then
+    rm -rf "$OPTLOC"
+fi
+
+exit 0

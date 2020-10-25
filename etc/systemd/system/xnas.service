@@ -1,0 +1,13 @@
+# SyncWatch - Service for SyncWatch
+
+[Unit]
+Description=XNAS (Extended NAS functionality on a linux computer)
+After=remote-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/xnas
+KillSignal=SIGINT
+
+[Install]
+WantedBy=multi-user.target
