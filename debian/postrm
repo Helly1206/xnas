@@ -70,9 +70,9 @@ echo "Removing binaries"
 [ -L $BINXSRV ] && unlink $BINXSRV
 [ -L $BINXSHR ] && unlink $BINXSHR
 
-echo "Removing files"
-if [ -d "$OPTLOC" ]; then
-    rm -rf "$OPTLOC"
-fi
+#echo "Removing files"
+#if [ -d "$OPTLOC" ]; then
+#    rm -rf "$OPTLOC"
+#fi
 
 exit 0
