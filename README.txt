@@ -1,4 +1,4 @@
-XNAS v0.8.0
+XNAS v0.8.8
 
 XNAS -- Extended NAS functionality on a linux computer
 ==== == ======== === ============= == = ===== ========

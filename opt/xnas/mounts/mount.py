@@ -105,13 +105,17 @@ class mount(devices, fstab, mountfs, zfs, mountpoint):
                         fsnames.append(mydevice['fsname'])
                     mymount['device'] = fsnames
                     mymount['mountpoint'] = device[0]['mountpoint']
+                    if not mymount['mountpoint']:
+                        mymount['mountpoint'] = self.getMountpoint(mount)
                     mymount['type'] = device[0]['type']
                     mymount['size'] = device[0]['size']
                     mymount['used'] = device[0]['used']
                     mymount['mounted'] = device[0]['mounted']
                     if mount['zfs']:
+                        mymount['enabled'] = zfs.isEna(self, mount['uuid'])
                         mymount['health'] = zfs.getHealth(self, mount['uuid'], device[0]['mounted'])
                     else:
+                        mymount['enabled'] = fstab.isEna(self, mount['uuid'], device[0]['fsname'], device[0]['label'])
                         mymount['health'] = fstab.getHealth(self, mount['uuid'], device[0]['fsname'], device[0]['label'], device[0]['mounted'])
                     mymount['referenced'] = self.isReferenced(key, True)
                     mymount['dynmount'] = mount['dyn']
@@ -128,6 +132,21 @@ class mount(devices, fstab, mountfs, zfs, mountpoint):
                 newdevices.append(blkdevice)
         # Exclude zfs devices from this list. if they exist, they are in the zpool list
         return newdevices
+
+    def getBlock(self):
+        typefilter = FSTYPES
+        typefilter.append("zfs")
+        blkdevices = self.getBlockList(typefilter)
+        for blkdevice in blkdevices:
+            if blkdevice["type"] == "zfs":
+                dbkey, dbval = self.engine.findInGroup(groups.MOUNTS, 'uuid', blkdevice["label"])
+            else:
+                dbkey, dbval = self.engine.findInGroup(groups.MOUNTS, 'uuid', blkdevice['uuid'])
+            if dbkey:
+                blkdevice['xmount'] = dbkey
+            else:
+                blkdevice['xmount'] = "-"
+        return blkdevices
 
     def pop(self, interactive, popArgs):
         addedMounts = []
@@ -222,6 +241,7 @@ class mount(devices, fstab, mountfs, zfs, mountpoint):
                     self.logger.warning("{} already mounted".format(name))
 
         if retval:
+            device[0]['mounted'] = True
             self.logger.info("{} mounted".format(name))
         elif not isMounted:
             self.logger.warning("{} not mounted".format(name))
@@ -275,6 +295,7 @@ class mount(devices, fstab, mountfs, zfs, mountpoint):
                     self.logger.warning("{} is not mounted".format(name))
 
         if retval:
+            device[0]['mounted'] = False
             self.logger.info("{} unmounted".format(name))
         elif isMounted:
             self.logger.warning("{} not unmounted".format(name))
@@ -282,15 +303,14 @@ class mount(devices, fstab, mountfs, zfs, mountpoint):
             retval = True
         return retval
 
-    def getMountpoint(self, name):
+    def getMountpoint(self, mount):
         retval = ""
 
-        db = self.engine.checkKey(groups.MOUNTS, name)
-        if db:
-            if db['zfs']:
-                entry = zfs.getEntry(self, db['uuid'])
+        if mount:
+            if mount['zfs']:
+                entry = zfs.getEntry(self, mount['uuid'])
             else:
-                entry = fstab.getEntry(self, db['uuid'])
+                entry = fstab.getEntry(self, mount['uuid'])
             if entry:
                 retval = entry['mountpoint']
         return retval
@@ -337,6 +357,49 @@ class mount(devices, fstab, mountfs, zfs, mountpoint):
             self.logger.warning("{} not disabled".format(name))
         return retval
 
+    def shw(self, name):
+        mountData = {}
+        db = self.engine.checkKey(groups.MOUNTS, name)
+        if db:
+            device = self.getDevices(db['uuid'])
+            if device:
+                fsnames = []
+                for mydevice in device:
+                    fsnames.append(mydevice['fsname'])
+                mountData['fsname'] = fsnames
+                uuids = []
+                for mydevice in device:
+                    uuids.append(mydevice['uuid'])
+                mountData['uuid'] = uuids
+                mountData['label'] = device[0]['label']
+                mountData['mountpoint'] = device[0]['mountpoint']
+                if not mountData['mountpoint']:
+                        mountData['mountpoint'] = self.getMountpoint(db)
+                mountData['type'] = device[0]['type']
+                if db['zfs']:
+                    entry = zfs.getEntry(self, db['uuid'])
+                else:
+                    entry = fstab.getEntry(self, db['uuid'])
+                if entry:
+                    mountData['options'] = fstab.getExtraOptions(self, entry['options'])
+                    mountData['auto'] = not 'noauto' in entry['options']
+                    mountData['rw'] = not 'ro' in entry['options']
+                    mountData['ssd'] = 'noatime' in entry['options']
+                    mountData['freq'] = entry['dump']
+                    mountData['pass'] = entry['pass']
+                else:
+                    mountData['options'] = []
+                    mountData['auto'] = False
+                    mountData['rw'] = False
+                    mountData['ssd'] = False
+                    mountData['freq'] = 0
+                    mountData['pass'] = 0
+                mode = self.getMode(mountData['mountpoint'])
+                mountData['uacc'] = self.getUacc(mode)
+                mountData['sacc'] = self.getSacc(mode)
+                mountData['dynmount'] = db['dyn']
+        return mountData
+
     def addFs(self, name):
         retval = True
         isZfs = False
@@ -359,6 +422,7 @@ class mount(devices, fstab, mountfs, zfs, mountpoint):
                 if db['zfs']:
                     isZfs = True
                     entry = zfs.getEntry(self, db['uuid'])
+                    uuid = db['uuid']
                 else:
                     entry = fstab.getEntry(self, db['uuid'])
         else: # not in db, check uuid, name or label in pool
@@ -370,14 +434,17 @@ class mount(devices, fstab, mountfs, zfs, mountpoint):
             if 'uuid' in self.engine.settings: # check in fstab
                 entry = fstab.getEntry(self, uuid = self.engine.settings['uuid'])
                 if entry:
+                    uuid = self.getUuid(entry)
                     self.logger.info("{} not in database, but uuid found, editing content".format(name))
             elif 'fsname' in self.engine.settings: # check in fstab
-                entry, uuid = fstab.getEntry2(self, fsname = self.engine.settings['fsname'])
+                entry = fstab.getEntry(self, fsname = self.engine.settings['fsname'])
                 if entry:
+                    uuid = self.getUuid(entry)
                     self.logger.info("{} not in database, but fsname found, editing content".format(name))
             elif label: # check in fstab
-                entry, uuid = fstab.getEntry2(self, label = label)
+                entry = fstab.getEntry(self, label = label)
                 if entry:
+                    uuid = self.getUuid(entry)
                     self.logger.info("{} not in database, but label found, editing content".format(name))
                 else: # Check in zfs pool
                     entry = zfs.getEntry(self, label)
@@ -430,7 +497,7 @@ class mount(devices, fstab, mountfs, zfs, mountpoint):
                 MPvalid = not mountpoint.exists(self, MPnew)
                 if not MPvalid:
                     if mountpoint.mounted(self, MPnew):
-                        # Check mountpoint is linked to current url
+                        # Check mountpoint is linked to current uuid
                         mp = ""
                         if isZfs:
                             if 'label' in self.engine.settings:
@@ -439,7 +506,6 @@ class mount(devices, fstab, mountfs, zfs, mountpoint):
                             tempUuid = self.deviceUuid(self.engine.settings)
                             if tempUuid:
                                 mp = mountpoint.getMountPoint(self, tempUuid, False)
-                            url = self.buildDbURL(self.engine.settings, typeObj)
                         MPvalid = mp == MPnew
                     else:
                         MPvalid = True
@@ -500,8 +566,8 @@ class mount(devices, fstab, mountfs, zfs, mountpoint):
 
         # Mount if not noauto option
         if retval:
-            if 'dyn' in self.engine.settings:
-                dyn = self.engine.settings['dyn']
+            if 'dynmount' in self.engine.settings:
+                dyn = self.engine.settings['dynmount']
             else:
                 dyn = False
             if deleteCurrentMountpoint:
@@ -513,22 +579,35 @@ class mount(devices, fstab, mountfs, zfs, mountpoint):
                 if retval:
                     self.logger.info("Created new mountpoint: {}".format(entryNew['mountpoint']))
             if retval:
-                mode = self.setMode(self.engine.settings['uacc'], self.engine.settings['sacc'])
-                if mode != self.getMode(entryNew['mountpoint']):
+                curmode = self.getMode(entryNew['mountpoint'])
+                if 'uacc' in self.engine.settings:
+                    uacc = self.engine.settings['uacc']
+                elif newEntry:
+                    uacc = "rw"
+                else:
+                    uacc = self.getUacc(curmode)
+                if 'sacc' in self.engine.settings:
+                    sacc = self.engine.settings['sacc']
+                elif newEntry:
+                    sacc = "rw"
+                else:
+                    sacc = self.getSacc(curmode)
+                mode = self.setMode(uacc, sacc)
+                if mode != curmode:
                     self.chMode(entryNew['mountpoint'], mode)
-                    self.logger.info("Changed mountpoint mode: user {}, superuser {}".format(self.engine.settings['uacc'], self.engine.settings['sacc']))
+                    self.logger.info("Changed mountpoint mode: user {}, superuser {}".format(uacc, sacc))
             if retval:
                 noauto = False
                 if 'options' in entryNew:
                     noauto = 'noauto' in entryNew['options']
-                    if not noauto:
-                        if isZfs:
-                            uuid = entryNew['label']
-                        else:
-                            uuid = self.getUuid(entryNew)
-                        retval = self.mnt(uuid, dbItem = False, Zfs = isZfs, mpoint = entryNew['mountpoint'])
-                        if dyn: # Do not blame mounting failed if dynmount device
-                            retval = True
+                if not noauto:
+                    if isZfs:
+                        uuid = entryNew['label']
+                    else:
+                        uuid = self.getUuid(entryNew)
+                    retval = self.mnt(uuid, dbItem = False, Zfs = isZfs, mpoint = entryNew['mountpoint'])
+                    if dyn: # Do not blame mounting failed if dynmount device
+                        retval = True
 
         # Add to DB or edit DB
         if retval:
@@ -663,8 +742,8 @@ class mount(devices, fstab, mountfs, zfs, mountpoint):
                     self.logger.info("Please install zfs no your distro (if available) and try again")
                     addThis = False
             if addThis:
-                if 'dyn' in self.engine.settings:
-                    dbMountItems['dyn'] = self.engine.settings['dyn']
+                if 'dynmount' in self.engine.settings:
+                    dbMountItems['dyn'] = self.engine.settings['dynmount']
                 else:
                     dbMountItems['dyn'] = False
                 dbMount[name] = dbMountItems

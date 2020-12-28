@@ -125,7 +125,7 @@ class systemdctl(object):
         return retval
 
     def isActive(self, service):
-        retval = []
+        retval = False
         if self.available():
             cmd = "{} {}".format(CTLISACTIVE, service)
             try:
@@ -136,7 +136,7 @@ class systemdctl(object):
         return retval
 
     def isEnabled(self, service):
-        retval = []
+        retval = False
         if self.available():
             cmd = "{} {}".format(CTLISENABLED, service)
             try:

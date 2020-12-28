@@ -112,6 +112,7 @@ class remotemount(fstab, mountfs, mountpoint):
                         mymount['size'] = None
                         mymount['used'] = None
                         mymount['mounted'] = False
+                    mymount['enabled'] = fstab.isEna(self, fsname = entry['fsname'])
                     mymount['health'] = self.getHealth(fsname = entry['fsname'], isMounted = mymount['mounted'], hasHost = ping().ping(url))
                     mymount['referenced'] = self.isReferenced(key, True)
                     mymount['dynmount'] = mount['dyn']
@@ -273,6 +274,36 @@ class remotemount(fstab, mountfs, mountpoint):
             self.logger.warning("{} not disabled".format(name))
         return retval
 
+    def shw(self, name):
+        remotemountData = {}
+        db = self.engine.checkKey(groups.REMOTEMOUNTS, name)
+        if db:
+            url = self.buildDbURL(db)
+            entry = self.getEntry(fsname=url)
+            if entry:
+                remotemountData['https'] = db['https']
+                remotemountData['server'] = db['server']
+                remotemountData['sharename'] = db['sharename']
+                remotemountData['mountpoint'] = entry['mountpoint']
+                remotemountData['type'] = entry['type']
+                remotemountData['options'] = fstab.getExtraOptions(self, entry['options'])
+                remotemountData['auto'] = not 'noauto' in entry['options']
+                remotemountData['rw'] = not 'ro' in entry['options']
+                remotemountData['freq'] = entry['dump']
+                remotemountData['pass'] = entry['pass']
+                typeObj = self.loadTypeObj(entry['type'])
+                if self.hasTypeObj(typeObj):
+                    remotemountData['username'] = typeObj.getCredentials(url)
+                else:
+                    remotemountData['username'] = ""
+                self.delTypeObj(typeObj)
+                remotemountData['password'] = ""
+                mode = self.getMode(remotemountData['mountpoint'])
+                remotemountData['uacc'] = self.getUacc(mode)
+                remotemountData['sacc'] = self.getSacc(mode)
+                remotemountData['dynmount'] = db['dyn']
+        return remotemountData
+
     def addRm(self, name):
         retval = True
         entry = {}
@@ -379,23 +410,48 @@ class remotemount(fstab, mountfs, mountpoint):
 
         # Create, check and update entry
         if retval:
+            url = ""
+            if entry:
+                url = entry['fsname']
+            else: # check for correct options is done before
+                url = self.buildDbURL(self.engine.settings, typeObj)
             entryNew = deepcopy(entry)
-            changed = self.makeEntry(entryNew, self.engine.settings, self.buildDbURL(self.engine.settings, typeObj))
+            changed = self.makeEntry(entryNew, self.engine.settings, url)
             retval = self.checkRemoteEntry(entryNew)
 
         # Credentials
         if retval:
             if self.hasTypeObj(typeObj) and entryNew['type'] != 'nfs' and entryNew['type'] != 'nfs4':
-                uspss = self.UserPass(self.engine.settings)
-                guest = not uspss[0]
-                if not guest:
-                    retval = typeObj.addCredentials(entryNew['fsname'], uspss[0], uspss[1])
+                if 'username' in self.engine.settings:
+                    uspss = self.UserPass(self.engine.settings)
+                    guest = not uspss[0]
+                    if not guest:
+                        if not uspss[1]:
+                            if uspss[0] != typeObj.getCredentials(entryNew['fsname']):
+                                retval = typeObj.addCredentials(entryNew['fsname'], uspss[0], uspss[1])
+                        else:    
+                            retval = typeObj.addCredentials(entryNew['fsname'], uspss[0], uspss[1])
+                else:
+                    guest = not typeObj.getCredentials(entryNew['fsname'])
             else:
                 guest = False
 
         if retval:
             oldOptions = deepcopy(entryNew['options'])
-            typeObj.setOptions(entryNew['options'], entryNew['fsname'], guest, self.strMode(self.setMode(self.engine.settings['uacc'], self.engine.settings['sacc'])))
+            curmode = self.getMode(entryNew['mountpoint'])
+            if 'uacc' in self.engine.settings:
+                uacc = self.engine.settings['uacc']
+            elif newEntry:
+                uacc = "rw"
+            else:
+                uacc = self.getUacc(curmode)
+            if 'sacc' in self.engine.settings:
+                sacc = self.engine.settings['sacc']
+            elif newEntry:
+                sacc = "rw"
+            else:
+                sacc = self.getSacc(curmode)
+            typeObj.setOptions(entryNew['options'], entryNew['fsname'], guest, self.strMode(self.setMode(uacc, sacc)))
             changed = changed or (oldOptions != entryNew['options'])
 
         # If changed, unmount and update
@@ -411,8 +467,8 @@ class remotemount(fstab, mountfs, mountpoint):
 
         # Mount if not noauto option
         if retval:
-            if 'dyn' in self.engine.settings:
-                dyn = self.engine.settings['dyn']
+            if 'dynmount' in self.engine.settings:
+                dyn = self.engine.settings['dynmount']
             else:
                 dyn = False
             if deleteCurrentMountpoint:
@@ -424,10 +480,23 @@ class remotemount(fstab, mountfs, mountpoint):
                 if retval:
                     self.logger.info("Created new mountpoint: {}".format(entryNew['mountpoint']))
             if retval:
-                mode = self.setMode(self.engine.settings['uacc'], self.engine.settings['sacc'])
-                if mode != self.getMode(entryNew['mountpoint']):
+                curmode = self.getMode(entryNew['mountpoint'])
+                if 'uacc' in self.engine.settings:
+                    uacc = self.engine.settings['uacc']
+                elif newEntry:
+                    uacc = "rw"
+                else:
+                    uacc = self.getUacc(curmode)
+                if 'sacc' in self.engine.settings:
+                    sacc = self.engine.settings['sacc']
+                elif newEntry:
+                    sacc = "rw"
+                else:
+                    sacc = self.getSacc(curmode)
+                mode = self.setMode(uacc, sacc)
+                if mode != curmode:
                     self.chMode(entryNew['mountpoint'], mode)
-                    self.logger.info("Changed mountpoint mode: user {}, superuser {}".format(self.engine.settings['uacc'], self.engine.settings['sacc']))
+                    self.logger.info("Changed mountpoint mode: user {}, superuser {}".format(uacc, sacc))
             if retval:
                 noauto = False
                 if 'options' in entryNew:
@@ -503,6 +572,8 @@ class remotemount(fstab, mountfs, mountpoint):
             typeObj = self.loadTypeObj(db['type'])
             doDel = True
         if self.hasTypeObj(typeObj):
+            if not 'https' in db:
+                db['https'] = True
             url = typeObj.buildURL(db['https'], db['server'], db['sharename'])
         if doDel:
             self.delTypeObj(typeObj)
@@ -594,8 +665,8 @@ class remotemount(fstab, mountfs, mountpoint):
             dbMountItems['server'] = server
             dbMountItems['sharename'] = sharename
             dbMountItems['type'] = entry['type']
-            if 'dyn' in self.engine.settings:
-                dbMountItems['dyn'] = self.engine.settings['dyn']
+            if 'dynmount' in self.engine.settings:
+                dbMountItems['dyn'] = self.engine.settings['dynmount']
             else:
                 dbMountItems['dyn'] = False
             dbMount[name] = dbMountItems
@@ -631,8 +702,10 @@ class remotemount(fstab, mountfs, mountpoint):
                     print("")
             del stdinput
         else:
-            usernm = settings['username']
-            passwd = settings['password']
+            if 'username' in settings:
+                usernm = settings['username']
+            if 'password' in settings:
+                passwd = settings['password']
         return (usernm, passwd)
 
     # df shows contents of remotemounts df --output=source,size,pcent,target -h /mnt/OS

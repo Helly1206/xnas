@@ -45,13 +45,23 @@ class xnas(xnas_engine):
 
     def run(self, argv):
         checkResults = []
+        checkList = []
         self.handleArgs(argv)
         if self.hasSetting(self.settings,"command") and (self.settings["command"] == "fix" or self.settings["command"] == "chk"):
-            checkResults = xnas_check(self, noMsg = True, json = self.settings['json']).check()
-        elif self.hasSetting(self.settings,"command") and (self.settings["command"] == "shw" or self.settings["command"] == "rst"):
-            checkResults = xnas_check(self, lightCheck = True, json = self.settings['json']).check()
+            xnasChk = xnas_check(self, noMsg = True, json = self.settings['json'])
+            checkResults = xnasChk.check()
+            checkList = xnasChk.GetList()
+            del xnasChk
+        elif self.hasSetting(self.settings,"command") and (self.settings["command"] == "shw" or self.settings["command"] == "rst" or self.settings["command"] == "srv"):
+            xnasChk = xnas_check(self, lightCheck = True, json = self.settings['json'])
+            checkResults = xnasChk.check()
+            checkList = xnasChk.GetList()
+            del xnasChk
         elif not self.hasSetting(self.settings,"command"):
-            checkResults = xnas_check(self, lightCheck = True, json = self.settings['json']).check()
+            xnasChk = xnas_check(self, lightCheck = True, json = self.settings['json'])
+            checkResults = xnasChk.check()
+            checkList = xnasChk.GetList()
+            del xnasChk
         else:
             if xnas_check(self).check():
                 if self.settings["json"]:
@@ -74,12 +84,14 @@ class xnas(xnas_engine):
                 else:
                     self.printMarked("No errors reported, nothing to be fixed")
             else:
-                xnas_fix(self).fix(checkResults)
+                xnasFix = xnas_fix(self)
+                xnasFix.fix(checkResults)
                 if self.settings["json"]:
-                    self.printJson(checkResults)
+                    self.printJson(xnasFix.GetList())
+                del xnasFix
         elif self.settings["command"] == "chk":
             if self.settings["json"]:
-                self.printJson(checkResults)
+                self.printJson(checkList)
             elif checkResults:
                 self.printMarked("Errors reported, please run 'xnas fix' to fix these errors")
             else:

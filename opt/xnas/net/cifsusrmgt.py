@@ -43,6 +43,16 @@ class cifsusrmgt(object):
     def list(self):
         return self.usrLst
 
+    def avl(self):
+        linuxUsers = self.getLinuxUsers()
+        for linuxUser in linuxUsers:
+            for usr in self.usrLst:
+                linuxUser['cifs'] = False
+                if (usr['user'] == linuxUser['user']) and (usr['id'] == linuxUser['id']):
+                    linuxUser['cifs'] = True
+                    break
+        return linuxUsers
+
     def exists(self, user):
         retval = False
 
@@ -71,13 +81,11 @@ class cifsusrmgt(object):
                 else:
                     cmtstr = ""
                 cmd = "{} -a -t{}{} -u {}".format(PDBEDITEXEC, fnstr, cmtstr, user)
-                print(cmd)
                 try:
                     shell().command(cmd, input = pwdstr)
                     retval = True
                 except:
                     pass
-                print(retval)
         return retval
 
     def modify(self, user, password, fullname, comment):
@@ -151,6 +159,51 @@ class cifsusrmgt(object):
             pass
 
         return userlst
+
+    def getLinuxUsers(self):
+        #only lists normal users
+        cmd = "grep -E '^UID_MIN|^UID_MAX' /etc/login.defs"
+        lines = []
+        try:
+            lines = shell().command(cmd).splitlines()
+        except:
+            pass
+        uidsel = {}
+        for line in lines:
+            try:
+                l = line.split()
+                uidsel[l[0]]=int(l[1])
+            except:
+                pass
+        if not 'UID_MIN' in uidsel:
+            uidsel['UID_MIN'] = 1000
+        if not 'UID_MAX' in uidsel:
+            uidsel['UID_MAX'] = 60000
+
+        cmd = "cat /etc/passwd"
+        lines = []
+        try:
+            lines = shell().command(cmd).splitlines()
+        except:
+            pass
+        users = []
+        for line in lines:
+            l = line.split(":")
+            try:
+                uid = int(l[2])
+                if (uid >= uidsel['UID_MIN']) and (uid <= uidsel['UID_MAX']):
+                    user = {}
+                    user['user'] = l[0]
+                    user['id'] = l[2]
+                    try:
+                        user['fullname'] = l[4].replace(",","")
+                    except:
+                        user['fullname'] = ""
+                    users.append(user)
+            except:
+                pass
+
+        return users
 
 ######################### MAIN ##########################
 if __name__ == "__main__":

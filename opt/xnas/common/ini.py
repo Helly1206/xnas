@@ -371,14 +371,43 @@ class ini(object):
                 entry = self.parseIniLine(line, linenr)
                 if entry:
                     entryval = (list(entry.values()))[0]
+                    entrykey = (list(entry.keys()))[0]
                     if entryval['type'] == SECTION:
                         sectionentries = entryval['value']
                         self.entries.update(entry)
                         mainSection = False
                     elif not mainSection:
-                        sectionentries.update(entry)
+                        if entrykey in sectionentries:
+                            if isinstance(sectionentries[entrykey]["value"], list):
+                                sectionentries[entrykey]["value"].append(entryval["value"])
+                                sectionentries[entrykey]["line"].append(entryval["line"])
+                            else:
+                                oldValue = sectionentries[entrykey]["value"]
+                                oldLine = sectionentries[entrykey]["line"]
+                                sectionentries[entrykey]["value"] = []
+                                sectionentries[entrykey]["value"].append(oldValue)
+                                sectionentries[entrykey]["value"].append(entryval["value"])
+                                sectionentries[entrykey]["line"] = []
+                                sectionentries[entrykey]["line"].append(oldLine)
+                                sectionentries[entrykey]["line"].append(entryval["line"])
+                        else:
+                            sectionentries.update(entry)
                     else:
-                        self.entries.update(entry)
+                        if entrykey in self.entries:
+                            if isinstance(self.entries[entrykey]["value"], list):
+                                self.entries[entrykey]["value"].append(entryval["value"])
+                                self.entries[entrykey]["line"].append(entryval["line"])
+                            else:
+                                oldValue = self.entries[entrykey]["value"]
+                                oldLine = self.entries[entrykey]["line"]
+                                self.entries[entrykey]["value"] = []
+                                self.entries[entrykey]["value"].append(oldValue)
+                                self.entries[entrykey]["value"].append(entryval["value"])
+                                self.entries[entrykey]["line"] = []
+                                self.entries[entrykey]["line"].append(oldLine)
+                                self.entries[entrykey]["line"].append(entryval["line"])
+                        else:
+                            self.entries.update(entry)
                 linenr += 1
 
     def updateIni(self):
@@ -393,53 +422,69 @@ class ini(object):
             insertline = 0
 
             for key, val in self.entries.items():
-                if val['line'] >= 0:
-                    insertline = val['line'] + 1
-                if val['changed']: # If not changed, do nothing
-                    if val['type'] == SECTION:
-                        if val['removed']:
-                            if not lines[val['line'] + offset -1].strip():
-                                lines.pop(val['line'] + offset -1)
+                lineL = self.syncLines(val['value'], val['line'], True)
+                value = self.listValue(val['value'])
+                i = 0
+                for line in lineL:
+                    if line >= 0:
+                        insertline = line + 1
+                    if val['changed']: # If not changed, do nothing
+                        if val['type'] == SECTION:
+                            if val['removed']:
+                                if not lines[line + offset -1].strip():
+                                    lines.pop(line + offset -1)
+                                    offset -= 1
+                                lines.pop(line + offset)
                                 offset -= 1
-                            lines.pop(val['line'] + offset)
-                            offset -= 1
-                            for k2, v2 in val['value'].items():
-                                lines.pop(v2['line'] + offset)
-                                offset -= 1
-                        elif val['line'] == LINENOEXIST:
-                            insertline = len(lines)
-                            lines.insert(insertline + offset, "\n")
-                            offset += 1
-                            lines.insert(insertline + offset, self.section2line(key))
-                            offset += 1
-                            for k2, v2 in val['value'].items():
-                                lines.insert(insertline + offset, self.item2line(k2, v2['value']))
+                                for k2, v2 in value[i].items():
+                                    line2L = self.syncLines(v2['value'], v2['line'], True)
+                                    for line2 in line2L:
+                                        lines.pop(line2 + offset)
+                                        offset -= 1
+                            elif line == LINENOEXIST:
+                                insertline = len(lines)
+                                lines.insert(insertline + offset, "\n")
                                 offset += 1
-                        else: #check all items for changed
-                            insertitemline = 0
-                            for k2, v2 in val['value'].items():
-                                if v2['line'] >= 0:
-                                    insertitemline = v2['line'] + 1
-                                if v2['changed']: # If not changed, do nothing
-                                    if v2['type'] == ITEM:
-                                        if v2['removed']:
-                                            lines.pop(v2['line'] + offset)
-                                            offset -= 1
-                                        elif v2['line'] == LINENOEXIST:
-                                            lines.insert(insertitemline + offset, self.item2line(k2, v2['value']))
-                                            offset += 1
-                                        else:
-                                            lines[v2['line'] + offset] = self.item2line(k2, v2['value'])
-                    elif val['type'] == ITEM:
-                        if val['removed']:
-                            lines.pop(val['line'] + offset)
-                            offset -= 1
-                        elif val['line'] == LINENOEXIST:
-                            lines.insert(insertline + offset, self.item2line(key, val['value']))
-                            offset += 1
-                        else:
-                            lines[val['line'] + offset] = self.item2line(key, val['value'])
-
+                                lines.insert(insertline + offset, self.section2line(key))
+                                offset += 1
+                                for k2, v2 in value[i].items():
+                                    line2L = self.syncLines(v2['value'], v2['line'], True)
+                                    value2 = self.listValue(v2['value'])
+                                    j = 0
+                                    for line2 in line2L:
+                                        lines.insert(insertline + offset, self.item2line(k2, value2[j]))
+                                        offset += 1
+                                        j += 1
+                            else: #check all items for changed
+                                insertitemline = 0
+                                for k2, v2 in value[i].items():
+                                    line2L = self.syncLines(v2['value'], v2['line'], True)
+                                    value2 = self.listValue(v2['value'])
+                                    j = 0
+                                    for line2 in line2L:
+                                        if line2 >= 0:
+                                            insertitemline = line2 + 1
+                                        if v2['changed']: # If not changed, do nothing
+                                            if v2['type'] == ITEM:
+                                                if v2['removed']:
+                                                    lines.pop(line2 + offset)
+                                                    offset -= 1
+                                                elif line2 == LINENOEXIST:
+                                                    lines.insert(insertitemline + offset, self.item2line(k2, value2[j]))
+                                                    offset += 1
+                                                else:
+                                                    lines[line2 + offset] = self.item2line(k2, value2[j])
+                                        j += 1
+                        elif val['type'] == ITEM:
+                            if val['removed']:
+                                lines.pop(line + offset)
+                                offset -= 1
+                            elif line == LINENOEXIST:
+                                lines.insert(insertline + offset, self.item2line(key, value[i]))
+                                offset += 1
+                            else:
+                                lines[line + offset] = self.item2line(key, value[i])
+                    i += 1
             with open(self.filename, "wt") as fp:
                 fp.writelines(lines)
                 retval = True
@@ -502,11 +547,28 @@ class ini(object):
         entrycontent = {}
         entrycontent['type'] = type
         entrycontent['value'] = value
-        entrycontent['line'] = line
+        entrycontent['line'] = self.syncLines(value, line)
         entrycontent['removed'] = False
         entrycontent['changed'] = changed
         entry[name]= entrycontent
         return entry
+
+    def syncLines(self, value, line, toList = False):
+        if isinstance(value, list):
+            if not isinstance(line, list):
+                line = [line]
+            if len(line) < len(value):
+                line.extend([LINENOEXIST] * (len(value)-len(line)))
+            elif len(line) > len(value):
+                del line[len(value):]
+        elif toList:
+            line = [line]
+        return line
+
+    def listValue(self, value):
+        if not isinstance(value, list):
+            value = [value]
+        return value
 
     def insert(self, dct, obj, pos):
         return {k: v for k, v in (list(dct.items())[:pos] + list(obj.items()) + list(dct.items())[pos:])}

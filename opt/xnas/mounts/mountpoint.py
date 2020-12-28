@@ -114,7 +114,28 @@ class mountpoint(object):
         os.chmod(mountpoint, mode)
 
     def getMode(self, mountpoint):
-        return os.stat(mountpoint).st_mode & MOUNTPOINTMODE
+        mode = DISABLEDMODE
+        if mountpoint:
+            mode = os.stat(mountpoint).st_mode & MOUNTPOINTMODE
+        return mode
+
+    def getUacc(self, mode):
+        retval = ""
+        if mode & UREADMODE:
+            retval += "r"
+        if mode & UWRITEMODE:
+            retval += "w"
+
+        return retval
+
+    def getSacc(self, mode):
+        retval = ""
+        if mode & SUREADMODE:
+            retval += "r"
+        if mode & SUWRITEMODE:
+            retval += "w"
+
+        return retval
 
     def modeDisabled(self):
         return DISABLEDMODE

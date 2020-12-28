@@ -143,11 +143,14 @@ class nfsshare(object):
 
             if export:
                 if self.engine.hasSetting(self.engine.settings, 'client'):
-                    if ip().isMask(self.engine.settings['client']):
-                        export['client'] = self.engine.settings['client']
+                    if ip().isIpMask(self.engine.settings['client']):
+                        export['client'] = ip().ipMask(self.engine.settings['client'])
                         export['changed'] = True
                     elif ip().isIp(self.engine.settings['client']):
                         export['client'] = ip().mask(24, self.engine.settings['client'])
+                        export['changed'] = True
+                    elif ip().isMaskOnly(self.engine.settings['client']):
+                        export['client'] = ip().mask(ip().getMask(self.engine.settings['client']))
                         export['changed'] = True
                     elif newExport:
                         logger.error("Incorrect IP format, default IP used")
@@ -160,14 +163,14 @@ class nfsshare(object):
                     export['changed'] = True
 
                 if self.engine.hasSetting(self.engine.settings, 'readonly'):
-                    if self.engine.settings['readonly'] and not 'ro' in export['options']:
+                    if self.engine.toBool(self.engine.settings['readonly']) and not 'ro' in export['options']:
                         try:
                             export['options'].remove("rw")
                         except:
                             pass
                         export['options'].insert(0,"ro")
                         export['changed'] = True
-                    if not self.engine.settings['readonly'] and not 'rw' in export['options']:
+                    if not self.engine.toBool(self.engine.settings['readonly']) and not 'rw' in export['options']:
                         try:
                             export['options'].remove("ro")
                         except:
@@ -176,8 +179,9 @@ class nfsshare(object):
                         export['changed'] = True
 
                 if self.engine.hasSetting(self.engine.settings, 'extraoptions'):
-                    export['options'].extend(self.engine.settings['extraoptions'].split(','))
-                    export['changed'] = True
+                    if self.engine.settings['extraoptions']:
+                        export['options'].extend(self.engine.settings['extraoptions'].split(','))
+                        export['changed'] = True
 
             retval = self.writeExports()
 

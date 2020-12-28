@@ -123,6 +123,17 @@ class zfs(object):
             retval = False
         return retval
 
+    def isEna(self, pool):
+        retval = False
+        cmd = "zfs get canmount -H -o value " + pool
+        try:
+            lines = shell().command(cmd)
+            if lines:
+                retval = lines.lower().strip() == "on"
+        except Exception as e:
+            retval = False
+        return retval
+
     def ena(self, pool):
         retval = True
         cmd = "zfs set canmount=on " + pool
@@ -187,8 +198,22 @@ class zfs(object):
             changed = True
             entry['type'] = "none"
         if "options" in settings:
-            changed = True
-            options = list(map(str.strip, settings['options'].split(",")))
+            doptions = list(map(str.strip, settings['options'].split(","))).remove("");
+            if not doptions:
+                doptions = []
+            soptions = self.getExtraOptions(doptions)
+            eoptions = self.getExtraOptions(options)
+            ochanged = False
+            if len(soptions) != len(eoptions):
+                ochanged = True
+            else:
+                for item in soptions:
+                    if item not in eoptions:
+                        ochanged = True
+                        break
+            if ochanged:
+                options = soptions.extend(self.getExtraOptions(options, True))
+                changed = True
         if "auto" in settings:
             if settings['auto']:
                 if "noauto" in options:
@@ -271,7 +296,7 @@ class zfs(object):
             if entry['mountpoint'] != curentry['mountpoint']:
                 self.setOpt(entry['label'], "mountpoint", entry['mountpoint'])
             if retval and (entry['options'] != curentry['options']):
-                retval = self.setOpts(entry['label'], entry['options'])
+                retval = self.setOpts(entry['label'], entry['options'], curentry['options'])
             # updating the entries themself is not required as they will be reloaded next time
         return retval
 
@@ -284,6 +309,16 @@ class zfs(object):
         return entry
 
     ################## INTERNAL FUNCTIONS ###################
+    
+    def getExtraOptions(self, options, default = False):
+        defOpt = ["auto","noauto","rw","ro","atime","noatime","diratime","nodiratime"]
+        extraOpt = []
+        for opt in options:
+            if not default and not opt in defOpt:
+                extraOpt.append(opt)
+            elif default and opt in defOpt:
+                extraOpt.append(opt)
+        return extraOpt
 
     def checkZfsInstalled(self):
         return shell().commandExists("zfs") and shell().commandExists("zpool")
@@ -311,7 +346,7 @@ class zfs(object):
             outp = shell().command(cmd)
             entry['mountpoint'] = outp.strip()
             entry['type'] = "zfs"
-            entry['options'] = self. getOpts(pool)
+            entry['options'] = self.getOpts(pool)
             entry['dump'] = str(0)
             entry['pass'] = str(0)
         return entry
@@ -355,35 +390,35 @@ class zfs(object):
     atime                   atime/noatime
     canmount                auto/noauto
     """
-    def setOpts(self, pool, opts):
-        if "devices" in opts:
-            self.setOpt(pool, "devices", "on")
-        elif "nodevices" in opts:
+    def setOpts(self, pool, opts, curopts):
+        if "nodevices" in opts and not "nodevices" in curopts:
             self.setOpt(pool, "devices", "off")
-        if "exec" in opts:
-            self.setOpt(pool, "exec", "on")
-        elif "noexec" in opts:
+        elif not "nodevices" in opts and "nodevices" in curopts:
+            self.setOpt(pool, "devices", "on")
+        if "noexec" in opts and not "noexec" in curopts:
             self.setOpt(pool, "exec", "off")
-        if "ro" in opts:
+        elif not "noexec" in opts and "noexec" in curopts:
+            self.setOpt(pool, "exec", "on")
+        if "ro" in opts and not "ro" in curopts:
             self.setOpt(pool, "readonly", "on")
-        elif "rw" in opts:
+        elif not "ro" in opts and "ro" in curopts:
             self.setOpt(pool, "readonly", "off")
-        if "setuid" in opts:
-            self.setOpt(pool, "setuid", "on")
-        elif "nosetuid" in opts:
+        if "nosetuid" in opts and not "nosetuid" in curopts:
             self.setOpt(pool, "setuid", "off")
-        if "xattr" in opts:
-            self.setOpt(pool, "xattr", "on")
-        elif "noxattr" in opts:
+        elif not "nosetuid" in opts and "nosetuid" in curopts:
+            self.setOpt(pool, "setuid", "on")
+        if "noxattr" in opts and not "noxattr" in curopts:
             self.setOpt(pool, "xattr", "off")
-        if "atime" in opts:
-            self.setOpt(pool, "atime", "on")
-        elif "noatime" in opts:
+        elif not "noxattr" in opts and "noxattr" in curopts:
+            self.setOpt(pool, "xattr", "on")
+        if "noatime" in opts and not "noatime" in curopts:
             self.setOpt(pool, "atime", "off")
-        if "auto" in opts:
-            self.setOpt(pool, "canmount", "on")
-        elif "noauto" in opts:
+        elif not "noatime" in opts and "noatime" in curopts:
+            self.setOpt(pool, "atime", "on")
+        if "noauto" in opts and not "noauto" in curopts:
             self.setOpt(pool, "canmount", "off")
+        elif not "noauto" in opts and "noauto" in curopts:
+            self.setOpt(pool, "canmount", "on")
         return True
 
     def getOpt(self, pool, opt):

@@ -97,6 +97,9 @@ class nfs(object):
     def delCredentials(self, url):
         return True
 
+    def getCredentials(self, url):
+        return ""
+
     ################## INTERNAL FUNCTIONS ###################
 
     def checkInstalled(self):

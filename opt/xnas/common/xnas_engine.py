@@ -19,7 +19,7 @@ import re
 #########################################################
 
 ####################### GLOBALS #########################
-VERSION = "0.8.0"
+VERSION = "0.8.8"
 LOG_FILENAME     = "xnas.log"
 LOG_MAXSIZE      = 100*1024*1024
 HELPSTANDARD     = {"help": "this help file",
@@ -57,9 +57,6 @@ class groups:
     SHARES = 'shares'
     REMOTEMOUNTS = "remotemounts"
     NETSHARES = "netshares"
-
-class settings:
-    DYNMOUNT = 'dynmount'
 
 from common.database import database
 
@@ -342,13 +339,29 @@ Version: {}""".format(ansi.bold, ansi.fg.blue, ansi.reset, ansi.italic, ansi.res
                 if isinstance(value, dict):
                     extralist = []
                     for k2, v2 in value.items():
-                        extralist.append("{}={}".format(k2, v2))
+                        if isinstance(v2, list):
+                            for v2item in v2:
+                                extralist.append("{}={}".format(k2, v2item))
+                        else:
+                            extralist.append("{}={}".format(k2, v2))
                     setting['value'] = extralist
                 else:
                     setting['value'] = value
                 settingsList.append(setting)
 
         return settingsList
+    
+    def printObj(obj):
+        prtObj = "none"
+        if obj == objects.MOUNT:
+            prtObj = "xmount"
+        elif obj == objects.REMOTEMOUNT:
+            prtObj = "xremotemount"
+        elif obj == objects.SHARE:
+            prtObj = "xshare"
+        elif obj == objects.NETSHARE:
+            prtObj = "xnetshare"
+        return prtObj
 
     def exitSignal(self, signum = 0, frame = 0):
         self.logger.error("Execution interrupted, exit ...")
@@ -372,7 +385,6 @@ Version: {}""".format(ansi.bold, ansi.fg.blue, ansi.reset, ansi.italic, ansi.res
 
         if etype:
             db = self.checkKey(etype, name)
-            print(db)
         else:
             # First look in shares
             db = self.checkKey(groups.SHARES, name)
@@ -586,12 +598,16 @@ Version: {}""".format(ansi.bold, ansi.fg.blue, ansi.reset, ansi.italic, ansi.res
                 key = argv[i][2:]
                 #try to find value in next word
                 if (i+2) < argc:
-                    if argv[i+2][0] == "-":
-                        if argv[i+1][0] != "-":
+                    if (len(argv[i+2]) > 0) and (argv[i+2][0] == "-"):
+                        if len(argv[i+1]) == 0:
+                            nextind = 2
+                        elif argv[i+1][0] != "-":
                             value = argv[i+1]
                             nextind = 2
                 elif (i+1) < argc:
-                    if argv[i+1][0] != "-":
+                    if len(argv[i+1]) == 0:
+                        nextind = 2
+                    elif argv[i+1][0] != "-":
                         value = argv[i+1]
                         nextind = 2
         else: # short
@@ -606,19 +622,23 @@ Version: {}""".format(ansi.bold, ansi.fg.blue, ansi.reset, ansi.italic, ansi.res
             else:
                 #try to find value in next word
                 if (i+2) < argc:
-                    if argv[i+2][0] == "-":
-                        if argv[i+1][0] != "-":
+                    if (len(argv[i+2]) > 0) and (argv[i+2][0] == "-"):
+                        if len(argv[i+1]) == 0:
+                            nextind = 2
+                        elif argv[i+1][0] != "-":
                             value = argv[i+1]
                             nextind = 2
                 elif (i+1) < argc:
-                    if argv[i+1][0] != "-":
+                    if len(argv[i+1]) == 0:
+                        nextind = 2
+                    elif  argv[i+1][0] != "-":
                         value = argv[i+1]
                         nextind = 2
         return key, value, nextind
 
     def getLogger(self):
         logpath = "/var/log"
-        LoggerPath = ""
+        LoggerPath = "/dev/null"
         # first look in log path
         if os.path.exists(logpath):
             if os.access(logpath, os.W_OK):

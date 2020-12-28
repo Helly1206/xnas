@@ -62,6 +62,17 @@ class netshare(object):
 
         return mynetshares
 
+    def lst(self):
+        mylist = []
+        shares = self.engine.checkGroup(groups.SHARES)
+        if shares:
+            for key, share in shares.items():
+                myitem = {}
+                myitem['xshare'] = key
+                myitem['netshare'] = self.isNetshare(key)
+                mylist.append(myitem)
+        return mylist
+
     def getShare(self, name):
         shr = ""
         db = self.engine.checkKey(groups.SHARES, name)
@@ -109,6 +120,13 @@ class netshare(object):
         else:
             self.logger.warning("{} not disabled".format(name))
         return retval
+
+    def shw(self, name):
+        netshareData = {}
+        db = self.engine.checkKey(groups.NETSHARES, name)
+        if db:
+            netshareData['type'] = db['type']
+        return netshareData
 
     def addNsh(self, name):
         retval = True
@@ -337,6 +355,13 @@ class netshare(object):
         return retval1 and retval2
 
     ################## INTERNAL FUNCTIONS ###################
+
+    def isNetshare(self, xshare):
+        netshare = False
+        db = self.engine.checkKey(groups.NETSHARES, xshare)
+        if db:
+            netshare = True
+        return netshare
 
     def clr(self, name):
         retval = False

@@ -16,7 +16,7 @@ from shares.share import share
 #########################################################
 
 ####################### GLOBALS #########################
-NAMELIST = ["add", "del", "bnd", "ubnd", "ena", "dis"]
+NAMELIST = ["add", "del", "bnd", "ubnd", "ena", "dis", "shw"]
 #########################################################
 
 ###################### FUNCTIONS ########################
@@ -87,6 +87,18 @@ class xshare(xnas_engine):
                 self.logger.info("Database updated")
             if self.settings["json"]:
                 self.printJsonResult(result)
+        elif self.settings["command"] == "shw":
+            shareData = Share.shw(self.settings["name"])
+            if self.settings["json"]:
+                self.printJson(shareData)
+            else:
+                self.prettyPrintTable(self.settings2Table(shareData))
+        elif self.settings["command"] == "lst":
+            listData = Share.lst()
+            if self.settings["json"]:
+                self.printJson(listData)
+            else:
+                self.prettyPrintTable(listData)
         else:
             self.parseError("Unknown command argument")
             if self.settings["json"]:
@@ -102,16 +114,18 @@ class xshare(xnas_engine):
                  "del": "deletes a share [del <name>]",
                  "ena": "enables a share [ena <name>]",
                  "dis": "disables a share [dis <name>]",
+                 "shw": "shows current share settings [shw <name>]",
                  "bnd": "binds a share [bnd <name>]",
                  "ubnd": "unbinds a share [ubd <name>]",
+                 "lst": "lists xmounts and xremotemounts to share [lst]",
                  "-": "show shares and their status"}
-        xopts = {"mount": "mount name to share <string> (add)",
-                 "type": "mount or remotemount type to search <string> (add)",
-                 "folder": "relative folder in mount to share <string> (add)",
+        xopts = {"xmount": "xmount name to share <string> (add)",
+                 "remotemount": "xmount is of remotemount type <boolean> (add)",
+                 "folder": "relative folder in xmount to share <string> (add)",
                  "uacc": "users access level (,r,w) (default = rw) (add)",
                  "sacc": "superuser access level (,r,w) (default = rw) (add)"}
         extra = ('Options may be entered as single JSON string using full name, e.g.\n'
-        'xshare add test \'{"mount": "TEST", "folder": "/music"}\'\n'
+        'xshare add test \'{"xmount": "TEST", "folder": "/music"}\'\n'
         'Mind the single quotes to bind the JSON string.')
         self.fillSettings(self.parseOpts(argv, xopts, xargs, extra), xopts)
 
@@ -135,8 +149,8 @@ class xshare(xnas_engine):
 
         self.settings.update(optsnargs[0])
         self.settingsBool(self.settings, 'json')
-        self.settingsStr(self.settings, 'uacc', default = "rw")
-        self.settingsStr(self.settings, 'sacc', default = "rw")
+        self.settingsStr(self.settings, 'uacc', False)
+        self.settingsStr(self.settings, 'sacc', False)
 
         self.nameRequired()
 

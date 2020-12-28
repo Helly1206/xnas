@@ -32,7 +32,7 @@ class ip(object):
         myIp = ""
         cmd = "hostname -I"
         try:
-            myIp = shell().command(cmd).strip()
+            myIp = shell().command(cmd).strip().split()[0]
         except:
             pass
         return myIp
@@ -62,6 +62,9 @@ class ip(object):
         myMask =  "{}.{}.{}.{}/{}".format(ipInt[3],ipInt[2],ipInt[1],ipInt[0],mask)
 
         return myMask
+        
+    def ipMask(self, myIp):
+        return self.mask(self.getMask(myIp), self.getIp(myIp))
 
     def isIp(self, myIp):
         retval = False
@@ -74,9 +77,37 @@ class ip(object):
 
         return retval
 
-    def isMask(self, mask):
+    def getIp(self, myIp):
+        retval = 32
+        maskParts = myIp.split('/')
+        if len(maskParts) >= 1:
+            if self.isIp(maskParts[0]):
+                retval = maskParts[0]
+            
+        return retval
+
+    def getMask(self, myIp):
+        retval = 32
+        maskParts = myIp.split('/')
+        if len(maskParts) == 2:
+            if self.isInt(maskParts[1], 32):
+                retval = int(maskParts[1])
+            
+        return retval
+
+    def isMaskOnly(self, myIp):
         retval = False
-        maskParts = mask.split('/')
+        maskParts = myIp.split('/')
+        if len(maskParts) == 2:
+            retval = len(maskParts[0]) == 0
+            if retval:
+                retval = self.isInt(maskParts[1], 32)
+
+        return retval
+
+    def isIpMask(self, myIp):
+        retval = False
+        maskParts = myIp.split('/')
         if len(maskParts) == 2:
             retval = self.isIp(maskParts[0])
             if retval:

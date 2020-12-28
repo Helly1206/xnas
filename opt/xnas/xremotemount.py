@@ -16,7 +16,7 @@ from remotes.remotemount import remotemount
 #########################################################
 
 ####################### GLOBALS #########################
-NAMELIST = ["add", "del", "mnt", "umnt", "clr", "ena", "dis"]
+NAMELIST = ["add", "del", "mnt", "umnt", "clr", "ena", "dis", "shw"]
 NAMECHECK = ["del", "clr"]
 #########################################################
 
@@ -110,6 +110,12 @@ class xremotemount(xnas_engine):
             result = Remotemount.dis(self.settings["name"])
             if self.settings["json"]:
                 self.printJsonResult(result)
+        elif self.settings["command"] == "shw":
+            remotemountData = Remotemount.shw(self.settings["name"])
+            if self.settings["json"]:
+                self.printJson(remotemountData)
+            else:
+                self.prettyPrintTable(self.settings2Table(remotemountData))
         elif self.settings["command"] == "lst":
             entries = Remotemount.inDB()
             if self.settings["json"]:
@@ -141,6 +147,7 @@ class xremotemount(xnas_engine):
                  "clr": "removes a remotemount, but leaves fstab [clr <name>]",
                  "ena": "enables a remotemount during boot [ena <name>]",
                  "dis": "disables a remotemount during boot [dis <name>]",
+                 "shw": "shows current remotemount settings [shw <name>]",
                  "lst": "lists xremotemount compatible fstab entries [lst]",
                  "url": "prints url of a <name> or <server>, <sharename> [url]",
                  "-": "show remotemounts and their status"}
@@ -160,7 +167,7 @@ class xremotemount(xnas_engine):
                  "sacc": "superuser access level (,r,w) (default = rw) (add)",
                  "username": "remote mount access username (guest if omitted) (add)",
                  "password": "remote mount access password (add)",
-                 "dyn": "dynamically mount when available <boolean> (add)"}
+                 "dynmount": "dynamically mount when available <boolean> (add)"}
         extra = ('URL generation from settings:\n'
         'davfs: <https>://<sharename>.<server>, e.g. https://test.myserver.com/dav.php/\n'
         'cifs : //<server>/<sharename>        , e.g. //192.168.1.1/test\n'
@@ -197,14 +204,14 @@ class xremotemount(xnas_engine):
         self.settingsBool(self.settings, 'human')
         self.settingsBool(self.settings, 'auto', False)
         self.settingsBool(self.settings, 'rw', False)
-        self.settingsBool(self.settings, 'https', True, True)
-        self.settingsInt(self.settings, 'freq')
-        self.settingsInt(self.settings, 'pass')
-        self.settingsStr(self.settings, 'uacc', default = "rw")
-        self.settingsStr(self.settings, 'sacc', default = "rw")
-        self.settingsStr(self.settings, 'username')
-        self.settingsStr(self.settings, 'password')
-        self.settingsBool(self.settings, 'dyn', True, False)
+        self.settingsBool(self.settings, 'https', False)
+        self.settingsInt(self.settings, 'freq', False)
+        self.settingsInt(self.settings, 'pass', False)
+        self.settingsStr(self.settings, 'uacc', False)
+        self.settingsStr(self.settings, 'sacc', False)
+        self.settingsStr(self.settings, 'username', False)
+        self.settingsStr(self.settings, 'password', False)
+        self.settingsBool(self.settings, 'dynmount', False)
 
         self.nameRequired()
 

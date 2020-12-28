@@ -60,6 +60,28 @@ class share(mountfs, mountpoint):
 
         return myshares
 
+    def lst(self):
+        mylist = []
+        mounts = self.engine.checkGroup(groups.MOUNTS)
+        if mounts:
+            for key, mount in mounts.items():
+                myitem = {}
+                myitem['xmount'] = key
+                myitem['remotemount'] = False
+                myitem['mountpoint'] = self.getSourceMountpoint(key, False)
+                myitem['xshares'] = self.findShares(key, False)
+                mylist.append(myitem)
+        remotemounts = self.engine.checkGroup(groups.REMOTEMOUNTS)
+        if remotemounts:
+            for key, mount in remotemounts.items():
+                myitem = {}
+                myitem['xmount'] = key
+                myitem['remotemount'] = True
+                myitem['mountpoint'] = self.getSourceMountpoint(key, True)
+                myitem['xshares'] = self.findShares(key, True)
+                mylist.append(myitem)
+        return mylist
+
     def getReferenced(self, name):
         #Shares can only be referenced to netshares, so check netshares for references
         db = self.engine.checkKey(groups.NETSHARES, name)
@@ -189,6 +211,18 @@ class share(mountfs, mountpoint):
             self.logger.warning("{} not disabled".format(name))
         return retval
 
+    def shw(self, name):
+        shareData = {}
+        db = self.engine.checkKey(groups.SHARES, name)
+        if db:
+            shareData['xmount'] = db['xmount']
+            shareData['remotemount'] = db['remotemount']
+            shareData['mountpoint'] = self.getSourceMountpoint(db['xmount'], db['remotemount'])
+            shareData['folder'] = db['folder']
+            shareData['uacc'] = db['uacc']
+            shareData['sacc'] = db['sacc']
+        return shareData
+
     def addSh(self, name):
         entryNew = {}
         newEntry = False
@@ -293,6 +327,17 @@ class share(mountfs, mountpoint):
 
     ################## INTERNAL FUNCTIONS ###################
 
+    def findShares(self, xmount, remotemount):
+        myshares = [];
+        shares = self.engine.checkGroup(groups.SHARES)
+        if shares:
+            for key, share in shares.items():
+                if (share['xmount'] == xmount) and (share['remotemount'] == remotemount):
+                    myshares.append(key)
+        if not myshares:
+            myshares.append("-");
+        return myshares
+
     def sourceDir(self, name, src = ""):
         folder = ""
         db = self.engine.checkKey(groups.SHARES, name)
@@ -324,18 +369,18 @@ class share(mountfs, mountpoint):
     def makeEntry(self, entry):
         changed = False
 
-        if "mount" in self.engine.settings:
+        if "xmount" in self.engine.settings:
             if "xmount" in entry:
-                echanged =  entry['xmount'] != self.engine.settings['mount']
+                echanged =  entry['xmount'] != self.engine.settings['xmount']
             else:
                 echanged = True
             changed = changed or echanged
-            entry['xmount'] = self.engine.settings['mount']
+            entry['xmount'] = self.engine.settings['xmount']
         elif not "xmount" in entry:
             changed = True
             entry['xmount'] = ""
-        if "type" in self.engine.settings:
-            remotemount = self.engine.settings['type'].lower() == 'remotemount'
+        if "remotemount" in self.engine.settings:
+            remotemount = self.engine.settings['remotemount']
             if "remotemount" in entry:
                 echanged =  entry['remotemount'] != remotemount
             else:

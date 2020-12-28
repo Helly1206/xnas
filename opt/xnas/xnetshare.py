@@ -19,7 +19,7 @@ from net.cifsshare import CfgCifs, HomesCifs, ShareCifs, VfsRecycleCifs
 #########################################################
 
 ####################### GLOBALS #########################
-NAMELIST = ["add", "del", "ena", "dis", "usr", "prv"]
+NAMELIST = ["add", "del", "ena", "dis", "shw", "usr", "prv"]
 #########################################################
 
 ###################### FUNCTIONS ########################
@@ -86,6 +86,12 @@ class xnetshare(xnas_engine):
                 self.logger.info("Database updated")
             if self.settings["json"]:
                 self.printJsonResult(result)
+        elif self.settings["command"] == "shw":
+            netshareData = Netshare.shw(self.settings["name"])
+            if self.settings["json"]:
+                self.printJson(netshareData)
+            else:
+                self.prettyPrintTable(self.settings2Table(netshareData))
         elif self.settings["command"] == "cnf":
             self.needSudo()
             result = Netshare.config()
@@ -110,11 +116,11 @@ class xnetshare(xnas_engine):
             self.needSudo()
             result = Netshare.users(self.settings["name"])
             if self.settings["json"]:
-                if self.settings["name"].lower() == "list":
+                if self.settings["name"].lower() == "list" or self.settings["name"].lower() == "avl":
                     self.printJson(result)
                 else:
                     self.printJsonResult(result)
-            elif self.settings["name"].lower() == "list":
+            elif self.settings["name"].lower() == "list" or self.settings["name"].lower() == "avl":
                 self.prettyPrintTable(result)
             elif self.settings["name"].lower() == "exists":
                 if result:
@@ -136,6 +142,30 @@ class xnetshare(xnas_engine):
             result = Netshare.refresh()
             if self.settings["json"]:
                 self.printJsonResult(result)
+        elif self.settings["command"] == "lst":
+            listData = Netshare.lst()
+            if self.settings["json"]:
+                self.printJson(listData)
+            else:
+                self.prettyPrintTable(listData)
+        elif self.settings["command"] == "ip":
+            myIp = ""
+            if "name" in self.settings:
+                if ip().isIpMask(self.settings["name"]):
+                    myIp = ip().ipMask(self.settings["name"])
+                elif ip().isIp(self.settings["name"]):
+                    myIp = ip().mask(32, self.settings["name"])
+                elif ip().isMaskOnly(self.settings["name"]):
+                    myIp = ip().mask(ip().getMask(self.settings["name"]))
+                else:
+                    myIp = ip().mask(32)
+            else:
+                myIp = ip().mask(32)
+            ipData = [{"ip": myIp}]
+            if self.settings["json"]:
+                self.printJson(ipData)
+            else:
+                self.prettyPrintTable(ipData)
         else:
             self.parseError("Unknown command argument")
             if self.settings["json"]:
@@ -151,11 +181,14 @@ class xnetshare(xnas_engine):
                  "del": "deletes a netshare [del <name>]",
                  "ena": "enables a netshare [ena <name>]",
                  "dis": "disables a netshare [dis <name>]",
+                 "shw": "shows current netshare settings [shw <name>]",
                  "cnf": "configure a netshare [cnf]",
                  "hms": "configure homes for cifs [hms]",
-                 "usr": "configure users for cifs [usr (add, del, exists, list)]",
+                 "usr": "configure users for cifs [usr (add, del, exists, ...)]",
                  "prv": "configure user privileges for cifs [prv <name>]",
                  "rfr": "refreshes netshares",
+                 "lst": "lists xshares to netshare [lst]",
+                 "ip": "generates ip address/ mask",
                  "-": "show netshares and their status"}
         xopts = {"type": "cifs or nfs type share <string> (add, cnf)"}
         extra = ('Show specific help for commands by filesystem type by e.g.\n'
@@ -232,7 +265,8 @@ class xnetshare(xnas_engine):
 
             specextra = ("Specific arguments for 'xnetshare {} -t {}':\n".format(cmd,type))
             specextra = specextra + ("    <arguments>\n"
-            "        list  : displays a list of users\n"
+            "        list  : displays a list of cifs users\n"
+            "        avl   : displays available linux users to add as cifs user\n"
             "        exists: checks whether a user with <username> exists\n"
             "        add   : adds or modifies a user with <username>\n"
             "        del   : deletes a user with <username>\n")
@@ -269,9 +303,6 @@ class xnetshare(xnas_engine):
 
         self.settings.update(optsnargs[0])
         self.settingsBool(self.settings, 'json')
-        self.settingsStr(self.settings, 'uacc', default = "rw")
-        self.settingsStr(self.settings, 'sacc', default = "rw")
-
         self.nameRequired()
 
         if self.settings['json']:

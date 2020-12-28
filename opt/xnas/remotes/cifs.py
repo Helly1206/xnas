@@ -137,6 +137,13 @@ class cifs(object):
             retval = True
         return retval
 
+    def getCredentials(self, url):
+        username = ""
+        cred = self.getCredsContent(url)
+        if cred:
+            username = cred["user"]
+        return username
+
     ################## INTERNAL FUNCTIONS ###################
 
     def checkInstalled(self):
@@ -157,6 +164,20 @@ class cifs(object):
             os.chown(credsFile, pwd.getpwnam('root').pw_uid, pwd.getpwnam('root').pw_gid) # set user:group as root:root
             os.chmod(credsFile, CREDSMODE)
             retval = True
+        except:
+            pass
+        return retval
+
+    def getCredsContent(self, url):
+        retval = {}
+        try:
+            credsFile = self.getCredsFile(url)
+            with open(credsFile, "rt") as fp:
+                for line in fp:
+                    if "username=" in line:
+                        retval["user"] = line.split('=')[1]
+                    if "password=" in line:
+                        retval["password"] = line.split('=')[1]
         except:
             pass
         return retval

@@ -299,12 +299,14 @@ class cifsshare(object):
 
             if cmd.lower() == "list":
                 retval = usrmgt.list()
+            elif cmd.lower() == "avl":
+                retval = usrmgt.avl()
             elif user:
                 if cmd.lower() == "exists":
                     retval = usrmgt.exists(user)
                 elif cmd.lower() == "add":
                     if not usrmgt.exists(user):
-                        self.logger.info("{}: User does not exists, add user".format(user))
+                        self.logger.info("{}: User does not exist, add user".format(user))
                         if self.engine.hasSetting(self.engine.settings, 'password'):
                             if self.engine.settings['password']:
                                 password = self.engine.settings['password']
@@ -312,7 +314,7 @@ class cifsshare(object):
                                 password = self.setPassword()
                         else:
                             password = self.setPassword()
-                        usrmgt.add(user, password, fullname, comment)
+                        retval = usrmgt.add(user, password, fullname, comment)
                     else:
                         self.logger.info("{}: User already exists, modifying user".format(user))
                         if self.engine.hasSetting(self.engine.settings, 'password'):
@@ -320,7 +322,7 @@ class cifsshare(object):
                                 password = self.engine.settings['password']
                             else:
                                 password = self.setPassword()
-                        usrmgt.modify(user, password, fullname, comment)
+                        retval = usrmgt.modify(user, password, fullname, comment)
                 elif cmd.lower() == "del":
                     retval = usrmgt.delete(user)
                 else:
@@ -334,7 +336,7 @@ class cifsshare(object):
 
         del usrmgt
 
-        if not retval:
+        if not retval and (cmd.lower() == "add" or cmd.lower() == "del"):
             self.logger.error("Error managing users")
 
         return retval
@@ -350,8 +352,14 @@ class cifsshare(object):
             else:
                 user = "guest"
             invalid = self.engine.hasSetting(self.engine.settings, 'invalid')
+            if invalid:
+                invalid = self.engine.toBool(self.engine.settings['invalid'])
             readonly = self.engine.hasSetting(self.engine.settings, 'readonly')
+            if readonly:
+                readonly = self.engine.toBool(self.engine.settings['readonly'])
             delete = self.engine.hasSetting(self.engine.settings, 'delete')
+            if delete:
+                delete = self.engine.toBool(self.engine.settings['delete'])
 
             self.updatePriv(name, privList, user, invalid, readonly, delete)
             retval = self.setPriv(name, privList)
@@ -437,7 +445,7 @@ class cifsshare(object):
 
             vfs_objects = self.cfg.get(name, ShareCifs.vfs_objects.key).strip().split(' ')
             if self.engine.hasSetting(self.engine.settings, 'recyclebin'):
-                if self.engine.settings['recyclebin']:
+                if self.engine.toBool(self.engine.settings['recyclebin']):
                     vfsdict = VfsRecycleCifs.todict()
                     vfsdict.pop(VfsRecycleCifs.vfs_object.key)
                     self.cfg.setDefaultObject(name, VfsRecycleCifs.vfs_object.value, vfsdict)
@@ -455,7 +463,7 @@ class cifsshare(object):
                         pass
 
             if self.engine.hasSetting(self.engine.settings, 'audit'):
-                if self.engine.settings['audit']:
+                if self.engine.toBool(self.engine.settings['audit']):
                     vfsdict = VfsFullAuditCifs.todict()
                     vfsdict.pop(VfsFullAuditCifs.vfs_object.key)
                     self.cfg.setDefaultObject(name, VfsFullAuditCifs.vfs_object.value, vfsdict)
@@ -467,8 +475,7 @@ class cifsshare(object):
                     except:
                         pass
 
-            if vfs_objects:
-                self.cfg.set(name, ShareCifs.vfs_objects.key, ' '.join(vfs_objects))
+            self.cfg.set(name, ShareCifs.vfs_objects.key, ' '.join(vfs_objects))
 
             self.cfgMapToGuest()
             retval = self.cfg.update()

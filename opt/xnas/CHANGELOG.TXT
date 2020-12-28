@@ -1,2 +1,24 @@
+[B]0.8.8[/B]
+- Fix changed some check function to light check to prevent an error from running.
+  (e.g. zfs degraded stopped xnas from working).
+- Add error parameter warning to print error, but not stop on this error.
+- Add list of all block devices command.
+- Add shw command to show current settings for xmount, xremotemount, xshare, xnetshare.
+- Add enabled parameter to list to show whether an item is enabled.
+- Fixed label and UUID case bug.
+- Add lst command for xhare and xnetshare.
+- Added possibility for multiple equal keys in ini-file. Values will be added to list.
+- Fixed multiple equal keys for pretty printing.
+- Fixed bug on incorrect error message when adding or modifying cifs users.
+- Fixed bug in systemdclt isEnabled and isActive.
+- Added netshare usr avl command to list available linux users that can be added as cifs user.
+- Changed mount and type options to xmount and remotemount in xshare to be consistent with shw commands.
+- Fixed issue with argument "" value.
+- Fixed issue in IP generation when adding unsupported ipV6 address.
+- Added xnetshare ip command to generate a local IP address with mask.
+- Fixed a few bugs in xnetshare settings.
+- Added readable JSON message output for XNAS check and XNAS fix.
+- Lots of further bugfixing.
+
 [B]0.8.0[/B]
 - Initial release

@@ -88,7 +88,7 @@ class fstab(object):
         return retval
 
     def deleteEntry(self, uuid = "", fsname = "", label = ""):
-        line = self.findEntryLine(uuid, fsname, label)
+        line = self.getEntryLine(uuid, fsname, label)
         try:
             self.delFstabLine(line)
             retval = True
@@ -98,20 +98,7 @@ class fstab(object):
         return retval
 
     def getEntry(self, uuid = "", fsname = "", label = ""):
-        return self.getEntryFromLine(self.findEntryLine(uuid, fsname, label))
-
-    def getEntry2(self, uuid = "", fsname = "", label = ""):
-        retuuid = ""
-        entry = self.getEntryFromLine(self.findEntryLine(uuid, fsname, label))
-        if entry:
-            retuuid = self.getUuid(entry)
-        elif not self.remote:
-            device = self.findDevices(uuid, fsname, label)
-            if device:
-                retuuid = device[0]['uuid']
-                entry = self.getEntryFromLine(self.findEntryLine(retuuid))
-
-        return entry, retuuid
+        return self.getEntryFromLine(self.getEntryLine(uuid, fsname, label))
 
     def getHealth(self, uuid = "", fsname = "", label = "", isMounted = False, hasHost = True):
         retval = "OFFLINE"
@@ -123,9 +110,17 @@ class fstab(object):
             retval = "ONLINE"
         return retval
 
+    def isEna(self, uuid = "", fsname = "", label = ""):
+        retval = False
+        line = self.getEntryLine(uuid, fsname, label)
+        entry = self.getEntryFromLine(line)
+        if not "noauto" in entry["options"]:
+            retval = True
+        return retval
+
     def ena(self, uuid = "", fsname = "", label = ""):
         retval = False
-        line = self.findEntryLine(uuid, fsname, label)
+        line = self.getEntryLine(uuid, fsname, label)
         entry = self.getEntryFromLine(line)
         if "noauto" in entry["options"]:
             entry["options"].remove("noauto")
@@ -139,7 +134,7 @@ class fstab(object):
 
     def dis(self, uuid = "", fsname = "", label = ""):
         retval = False
-        line = self.findEntryLine(uuid, fsname, label)
+        line = self.getEntryLine(uuid, fsname, label)
         entry = self.getEntryFromLine(line)
         if not "noauto" in entry["options"]:
             entry["options"].append("noauto")
@@ -158,54 +153,53 @@ class fstab(object):
         else:
             changed = True
             options = []
+        
+        device = {}
+        if not self.remote:
+            if "fsname" in settings and settings["fsname"]:
+                device = self.findDevices(fsname = settings["fsname"])[0]
+            elif "uuid" in settings and settings["uuid"]:
+                device = self.findDevices(uuid = settings["uuid"])[0]
+            elif "label" in settings and settings["label"]:
+                device = self.findDevices(label = settings["label"])[0]
 
-        if "fsname" in settings:
-            if "fsname" in entry:
-                echanged =  entry['fsname'] != settings['fsname']
-            else:
-                echanged = True
-            if not self.remote:
-                device = self.findDevices(fsname = settings["fsname"])
+        if "fsname" in entry:
+            if fsname: # remote
+                changed = changed or entry['fsname'] != fsname
+                entry['fsname'] = fsname
+            elif entry["fsname"]:
                 if device:
-                    entry['uuid'] = device[0]['uuid']
-                    echanged =  entry['uuid'] != device[0]['uuid']
-            changed = changed or echanged
-            entry['fsname'] = settings['fsname']
-        elif fsname:
-            if "fsname" in entry:
-                echanged =  entry['fsname'] != fsname
+                    changed = changed or entry['fsname'] != device['fsname']
+                    entry['fsname'] = device['fsname']
             else:
-                echanged = True
-            changed = changed or echanged
-            entry['fsname'] = fsname
-        elif not "fsname" in entry:
-            changed = True
-            entry['fsname'] = ""
-        if "uuid" in settings:
-            if "uuid" in entry:
-                echanged =  entry['uuid'] != settings['uuid']
-            else:
-                echanged = True
-            changed = changed or echanged
-            entry['uuid'] = settings['uuid']
-        elif not "uuid" in entry:
-            changed = True
-            entry['uuid'] = ""
-        if "label" in settings:
-            if "label" in entry:
-                echanged =  entry['label'] != settings['label']
-            else:
-                echanged = True
-            if not self.remote:
-                device = self.findDevices(label = settings["label"])
+                entry["fsname"] = ""  
+        elif fsname: # remote
+                changed = True
+                entry['fsname'] = fsname
+        else:
+            entry["fsname"] = "" 
+        if "uuid" in entry:
+            if entry["uuid"]:
                 if device:
-                    entry['uuid'] = device[0]['uuid']
-                    echanged =  entry['uuid'] != device[0]['uuid']
-            changed = changed or echanged
-            entry['label'] = settings['label']
-        elif not "label" in entry:
-            changed = True
-            entry['label'] = ""
+                    changed = changed or entry['uuid'] != device['uuid']
+                    entry['uuid'] = device['uuid']
+            else:
+                entry["uuid"] = ""
+        else:
+            entry["uuid"] = "" 
+        if "label" in entry:
+            if entry["label"]:
+                if device:
+                    changed = changed or entry['label'] != device['label']
+                    entry['label'] = device['label']
+            else:
+                entry["label"] = ""
+        else:
+            entry["label"] = ""
+        if not entry["fsname"] and not entry["uuid"] and not entry["label"]: #new device
+            entry["uuid"] = device["uuid"]
+            changed = True 
+                    
         if "mountpoint" in settings:
             if "mountpoint" in entry:
                 echanged =  entry['mountpoint'] != settings['mountpoint']
@@ -231,9 +225,23 @@ class fstab(object):
             else:
                 entry['type'] = "none"
         if "options" in settings:
-            changed = True
-            options = list(map(str.strip, settings['options'].split(",")))
-        elif not "options" in entry and not self.remote:
+            doptions = list(map(str.strip, settings['options'].split(","))).remove("");
+            if not doptions:
+                doptions = []
+            soptions = self.getExtraOptions(doptions)
+            eoptions = self.getExtraOptions(options)
+            ochanged = False
+            if len(soptions) != len(eoptions):
+                ochanged = True
+            else:
+                for item in soptions:
+                    if item not in eoptions:
+                        ochanged = True
+                        break
+            if ochanged:
+                options = soptions.extend(self.getExtraOptions(options, True))
+                changed = True
+        elif not ("options" in entry or len(entry["options"]) == 0) and not self.remote:
             changed = True
             options.append("defaults")
         if "auto" in settings:
@@ -285,14 +293,13 @@ class fstab(object):
         elif not "pass" in entry:
             changed = True
             entry['pass'] = str(0)
-
         return changed
 
     def checkEntry(self, entry, new = True, changed = True, checkMnt = False):
         retval = True
         if not self.remote:
             self.loadDevices()
-
+            
             if entry["uuid"]:
                 if not new:
                     if self.findEntryLine(uuid = entry["uuid"]) < 0:
@@ -373,7 +380,28 @@ class fstab(object):
             lst.append(bobj)
         return lst
 
+    def getExtraOptions(self, options, default = False):
+        defOpt = ["auto","noauto","rw","ro","atime","noatime","diratime","nodiratime","_netdev"]
+        extraOpt = []
+        for opt in options:
+            if not default and not opt in defOpt:
+                extraOpt.append(opt)
+            elif default and opt in defOpt:
+                extraOpt.append(opt)
+        return extraOpt
+
+
     ################## INTERNAL FUNCTIONS ###################
+    
+    def getEntryLine(self, uuid = "", fsname = "", label = ""):
+        retuuid = ""
+        line = self.findEntryLine(uuid, fsname, label)
+        if line < 0 and not self.remote:
+            device = self.findDevices(uuid, fsname, label)
+            if device:
+                line = self.findEntryLine(device[0]['uuid'], device[0]['fsname'], device[0]['label'])
+
+        return line
 
     def readFstab(self):
         linenr = 0
@@ -474,10 +502,10 @@ class fstab(object):
                 if "UUID=" in linelist[0].upper():
                     entry['content']['fsname'] = ""
                     entry['content']['label'] = ""
-                    entry['content']['uuid'] = linelist[0].upper().replace("UUID=", "")
+                    entry['content']['uuid'] = linelist[0].split("=")[1].strip()
                 elif "LABEL=" in linelist[0].upper():
                     entry['content']['fsname'] = ""
-                    entry['content']['label'] = linelist[0].upper().replace("LABEL=", "")
+                    entry['content']['label'] = linelist[0].split("=")[1].strip()
                     entry['content']['uuid'] = ""
                 else:
                     entry['content']['fsname'] = linelist[0]

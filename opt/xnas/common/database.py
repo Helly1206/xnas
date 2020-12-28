@@ -142,6 +142,20 @@ class database(object):
             name = pname + str(i)
             i += 1
 
+        return name(value3)
+
+        if not name:
+            name = self.randomString()
+        elif self.checkKey(group, name):
+            if value4:
+                name = value4+name
+
+        i = 1
+        pname = name
+        while self.checkKey(group, name):
+            name = pname + str(i)
+            i += 1
+
         return name
 
     def gettype(self, text, txtype = True):

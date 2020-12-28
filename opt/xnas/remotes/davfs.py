@@ -148,6 +148,13 @@ class davfs(object):
     def hasCredentials(self, url):
         return self.findCred(url) != {}
 
+    def getCredentials(self, url):
+        username = ""
+        cred = self.findCred(url)
+        if cred:
+            username = cred["user"]
+        return username
+
     ################## INTERNAL FUNCTIONS ###################
 
     def checkInstalled(self):
