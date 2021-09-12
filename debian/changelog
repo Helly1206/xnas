@@ -1,3 +1,13 @@
+xnas (0.90) stable; urgency=low
+
+  * Fixed bug in adding remote mount trying to read unexisting new mountpoint
+  * Fixed bug in newlines in davfs secrets file
+  * Fixed error in help text for xdir
+  * Fixed ZFS label error
+  * Performed system testing
+
+ -- Helly1206 <hellyrulez@hotmail.com>  Sun, 12 Sep 2021 09:42:55 +0100
+
 xnas (0.88) stable; urgency=low
 
   * Bugfixing, updates and some new funtionality.

@@ -1,4 +1,4 @@
-XNAS v0.8.8
+XNAS v0.9.0
 
 XNAS -- Extended NAS functionality on a linux computer
 ==== == ======== === ============= == = ===== ========
@@ -9,7 +9,7 @@ XNAS is a simple and lightweight solution to build a nas on almost any linux dis
 - XNAS is able to handle ZFS mounts
 - XNAS can handle remote mounts of type cifs, nfs or davfs
 
-Configuration is stored in an XML file (/etc/xnas/xnas.xml)
+Configuration is stored in an XML file (/etc/xnas.xml)
 This file can be added by hand, but it is better to let xnas manage this file.
 If this file is corrupted, xnas won't work.
 

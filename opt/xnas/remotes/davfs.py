@@ -163,7 +163,7 @@ class davfs(object):
     def checkSecrets(self):
         if not os.path.isfile(SECRETSFILE):
             with open(SECRETSFILE, "wt") as fp:
-                fp.writelines(["# davfs2 secrets file created by xnas","# davfs2 secrets file was non existent"])
+                fp.writelines(["# davfs2 secrets file created by xnas\n","# davfs2 secrets file was non existent\n\n"])
             os.chown(SECRETSFILE, pwd.getpwnam('root').pw_uid, pwd.getpwnam('root').pw_gid) # set user:group as root:root
             os.chmod(SECRETSFILE, SECRETSMODE)
 
@@ -202,8 +202,14 @@ class davfs(object):
             fp.writelines(lines)
 
     def addCred(self, url, username, password):
+        with open(SECRETSFILE, "rt") as fp:
+            filetext = str(fp.read())
+        newline = "\n"
+        if filetext[-1] == newline:
+            newline = ""
+
         with open(SECRETSFILE, "at") as fp:
-            fp.writelines(["{} {} {}".format(url, username, password)])
+            fp.writelines(["{}{} {} {}".format(newline, url, username, password)])
 
 
 

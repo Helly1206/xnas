@@ -175,8 +175,9 @@ class zfs(object):
         if "uuid" in settings:
             self.logger.info("uuid is not used on ZFS")
         entry['uuid'] = ""
-        changed = changed or entry['label'] != name
-        entry['label'] = name
+        if not "label" in entry:
+            entry['label'] = name
+            changed = True
         if "mountpoint" in settings:
             if "mountpoint" in entry:
                 echanged =  entry['mountpoint'] != settings['mountpoint']
@@ -309,7 +310,7 @@ class zfs(object):
         return entry
 
     ################## INTERNAL FUNCTIONS ###################
-    
+
     def getExtraOptions(self, options, default = False):
         defOpt = ["auto","noauto","rw","ro","atime","noatime","diratime","nodiratime"]
         extraOpt = []

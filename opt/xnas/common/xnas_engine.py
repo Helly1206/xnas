@@ -19,7 +19,7 @@ import re
 #########################################################
 
 ####################### GLOBALS #########################
-VERSION = "0.8.8"
+VERSION = "0.9.0"
 LOG_FILENAME     = "xnas.log"
 LOG_MAXSIZE      = 100*1024*1024
 HELPSTANDARD     = {"help": "this help file",
@@ -350,7 +350,7 @@ Version: {}""".format(ansi.bold, ansi.fg.blue, ansi.reset, ansi.italic, ansi.res
                 settingsList.append(setting)
 
         return settingsList
-    
+
     def printObj(obj):
         prtObj = "none"
         if obj == objects.MOUNT:

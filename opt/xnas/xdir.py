@@ -57,7 +57,7 @@ class xdir(xnas_engine):
                 self.prettyPrintTable(contents)
 
     def handleArgs(self, argv):
-        xargs = {"<name>": "Name of the folder to change to",
+        xargs = {"<name>": "Name of the folder to list",
                  "<loc>": "(Optional) Relative location from the name folder",
                  "<type>": "(Optional) Type of object to look at"}
         xopts = {"human": "show sizes in human readable format",

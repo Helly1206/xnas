@@ -429,7 +429,7 @@ class remotemount(fstab, mountfs, mountpoint):
                         if not uspss[1]:
                             if uspss[0] != typeObj.getCredentials(entryNew['fsname']):
                                 retval = typeObj.addCredentials(entryNew['fsname'], uspss[0], uspss[1])
-                        else:    
+                        else:
                             retval = typeObj.addCredentials(entryNew['fsname'], uspss[0], uspss[1])
                 else:
                     guest = not typeObj.getCredentials(entryNew['fsname'])
@@ -438,17 +438,17 @@ class remotemount(fstab, mountfs, mountpoint):
 
         if retval:
             oldOptions = deepcopy(entryNew['options'])
-            curmode = self.getMode(entryNew['mountpoint'])
+            curmode = self.setMode("rw", "rw") # RW mode if new or non existent
+            if currentMountpoint:
+                curmode = self.getMode(currentMountpoint)
+            elif mountpoint.exists(self, entryNew['mountpoint']):
+                curmode = self.getMode(entryNew['mountpoint'])
             if 'uacc' in self.engine.settings:
                 uacc = self.engine.settings['uacc']
-            elif newEntry:
-                uacc = "rw"
             else:
                 uacc = self.getUacc(curmode)
             if 'sacc' in self.engine.settings:
                 sacc = self.engine.settings['sacc']
-            elif newEntry:
-                sacc = "rw"
             else:
                 sacc = self.getSacc(curmode)
             typeObj.setOptions(entryNew['options'], entryNew['fsname'], guest, self.strMode(self.setMode(uacc, sacc)))
