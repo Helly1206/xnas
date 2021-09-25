@@ -17,6 +17,7 @@ from shares.share import share
 
 ####################### GLOBALS #########################
 NAMELIST = ["add", "del", "bnd", "ubnd", "ena", "dis", "shw"]
+NAMECHECK = ["del", "shw", "bnd", "dis", "add"]
 #########################################################
 
 ###################### FUNCTIONS ########################
@@ -35,10 +36,12 @@ class xshare(xnas_engine):
     def run(self, argv):
         self.handleArgs(argv)
         Share = share(self)
-        if xnas_check(self, Share = Share, lightCheck = True, json = self.settings['json']).check():
+        xcheck = xnas_check(self, Share = Share, lightCheck = True, json = self.settings['json'])
+        if xcheck.ErrorExit(xcheck.check(), self.settings, NAMECHECK):
             if self.settings["json"]:
                 self.printJsonResult(False)
             exit(1)
+        del xcheck
         if not self.hasSetting(self.settings,"command"):
             shares = Share.getShares()
             if self.settings["json"]:

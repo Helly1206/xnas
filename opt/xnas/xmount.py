@@ -17,7 +17,7 @@ from mounts.mount import mount
 
 ####################### GLOBALS #########################
 NAMELIST = ["add", "del", "mnt", "umnt", "clr", "ena", "dis", "shw"]
-NAMECHECK = ["del", "clr"]
+NAMECHECK = ["del", "clr", "mnt", "dis", "shw"]
 #########################################################
 
 ###################### FUNCTIONS ########################

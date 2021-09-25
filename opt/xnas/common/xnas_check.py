@@ -100,22 +100,28 @@ class xnas_check(object):
             if not self.noMsg:
                 print("Please run 'xnas fix' to fix these errors")
         return Errors
-        
+
     def GetList(self):
         return self.msgLst
 
     def ErrorExit(self, Errors, settings, cmdNames):
-        if not Errors:
-            retval = False
-        else:
-            retval = True
-            if "command" in settings and "name" in settings:
-                if settings['command'] in cmdNames:
-                    for Error in Errors:
-                        if Error['obj'] == self.object:
-                            if Error['name'] == settings['name']:
-                                retval = False
-                                break
+        retval = False
+        if self.ErrorExitCmd(Errors, settings, self.object):
+            if "command" in settings:
+                if not settings['command'] in cmdNames:
+                    retval = True
+
+        return retval
+
+    def ErrorExitCmd(self, Errors, settings, obj):
+        retval = False
+        if Errors:
+            if "name" in settings:
+                for Error in Errors:
+                    if Error['obj'] == obj:
+                        if Error['name'] == settings['name']:
+                            retval = True
+                            break
 
         return retval
 
@@ -320,7 +326,7 @@ class xnas_check(object):
         elif obj == objects.NETSHARE:
             if check == errors.UNAVAILABLE:
                 self.logError("{}: [Netshare] Source device '{}' is unavailable".format(name, text))
-                
+
     def logError(self, message):
         msg = {}
         self.msgCnt += 1
@@ -329,7 +335,7 @@ class xnas_check(object):
         msg['message'] = message
         self.msgLst.append(msg)
         self.logger.error(message)
-        
+
 ######################### MAIN ##########################
 if __name__ == "__main__":
     pass

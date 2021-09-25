@@ -83,7 +83,7 @@ class xservices(xnas_engine):
         result = ""
         self.handleArgs(argv)
         if xnas_check(self, lightCheck = True).check():
-            exit(1)
+            self.logger.warning("Running xservices with errors, service may have limited performance")
 
         if self.checkInstanceRunning():
             self.logger.info("Another instance of xservices is already running, exit ...")
@@ -175,7 +175,7 @@ class xservices(xnas_engine):
                 removable = False
             self.dynmount.update(zfshealth, removable)
             self.dynmount.updateZfsList()
-            
+
         self.start()
         self.mutex.release()
 

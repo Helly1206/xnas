@@ -108,6 +108,8 @@ class cifsemptybin(object):
         return
 
     def loopFolderRemove(self, location, maxage):
+        if not os.path.isdir(location):
+            return
         with os.scandir(location) as entries:
             for entry in entries:
                 try:
@@ -130,6 +132,8 @@ class cifsemptybin(object):
         return
 
     def loopFolderEmpty(self, location):
+        if not os.path.isdir(location):
+            return
         with os.scandir(location) as entries:
             for entry in entries:
                 try:

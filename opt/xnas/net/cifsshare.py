@@ -443,7 +443,7 @@ class cifsshare(object):
             #    invalid_users        = param('invalid users',None) #Cfg
             #    write_list           = param('write list',None) #Cfg, implemented in users/ priv
 
-            vfs_objects = self.cfg.get(name, ShareCifs.vfs_objects.key).strip().split(' ')
+            vfs_objects = self.getVfsObjects(name)
             if self.engine.hasSetting(self.engine.settings, 'recyclebin'):
                 if self.engine.toBool(self.engine.settings['recyclebin']):
                     vfsdict = VfsRecycleCifs.todict()
@@ -594,7 +594,7 @@ class cifsshare(object):
         binLoc = ""
 
         if self.findShare(name):
-            vfs_objects = self.cfg.get(name, ShareCifs.vfs_objects.key).strip().split(' ')
+            vfs_objects = self.getVfsObjects(name)
             if VfsRecycleCifs.vfs_object.value in vfs_objects:
                 obj = self.cfg.getObject(name, VfsRecycleCifs.vfs_object.value)
                 if obj:
@@ -960,6 +960,17 @@ class cifsshare(object):
                             extraoptions.pop(ekey)
             settings['extraoptions'] = extraoptions
         return settings
+
+    def getVfsObjects(self, name):
+        vfs_objects = []
+        objstring = self.cfg.get(name, ShareCifs.vfs_objects.key)
+        if objstring:
+            if type(objstring) == str:
+                objs = objstring.strip().split(' ')
+                for obj in objs:
+                    if obj.strip():
+                        vfs_objects.append(obj.strip())
+        return vfs_objects
 
 ######################### MAIN ##########################
 if __name__ == "__main__":

@@ -20,6 +20,7 @@ from net.cifsshare import CfgCifs, HomesCifs, ShareCifs, VfsRecycleCifs
 
 ####################### GLOBALS #########################
 NAMELIST = ["add", "del", "ena", "dis", "shw", "usr", "prv"]
+NAMECHECK = ["del", "shw", "dis", "add", "usr", "prv"]
 #########################################################
 
 ###################### FUNCTIONS ########################
@@ -38,10 +39,12 @@ class xnetshare(xnas_engine):
     def run(self, argv):
         self.handleArgs(argv)
         Netshare = netshare(self)
-        if xnas_check(self, Net = Netshare, lightCheck = True, json = self.settings['json']).check():
+        xcheck = xnas_check(self, Net = Netshare, lightCheck = True, json = self.settings['json'])
+        if xcheck.ErrorExit(xcheck.check(), self.settings, NAMECHECK):
             if self.settings["json"]:
                 self.printJsonResult(False)
             exit(1)
+        del xcheck
         if not self.hasSetting(self.settings,"command"):
             netshares = Netshare.getNetshares()
             if self.settings["json"]:

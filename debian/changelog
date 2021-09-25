@@ -1,3 +1,12 @@
+xnas (0.91) stable; urgency=low
+
+  * Fixed command failures on errors
+  * Fixed smb vfs objects issue
+  * Fixed error on non existing recycle bin in xservices
+  * Fixed errors in xdir, xpd and xcd
+
+ -- Helly1206 <hellyrulez@hotmail.com>  Sun, 25 Sep 2021 09:22:31 +0100
+
 xnas (0.90) stable; urgency=low
 
   * Fixed bug in adding remote mount trying to read unexisting new mountpoint

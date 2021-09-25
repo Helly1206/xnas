@@ -17,7 +17,7 @@ from remotes.remotemount import remotemount
 
 ####################### GLOBALS #########################
 NAMELIST = ["add", "del", "mnt", "umnt", "clr", "ena", "dis", "shw"]
-NAMECHECK = ["del", "clr"]
+NAMECHECK = ["del", "clr", "mnt", "dis", "shw"]
 #########################################################
 
 ###################### FUNCTIONS ########################
@@ -111,6 +111,7 @@ class xremotemount(xnas_engine):
             if self.settings["json"]:
                 self.printJsonResult(result)
         elif self.settings["command"] == "shw":
+            self.needSudo()
             remotemountData = Remotemount.shw(self.settings["name"])
             if self.settings["json"]:
                 self.printJson(remotemountData)

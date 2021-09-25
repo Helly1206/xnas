@@ -39,10 +39,17 @@ class xpd(xnas_engine):
         checkResults = []
         result = ""
         self.handleArgs(argv)
-        if xnas_check(self, lightCheck = True).check():
-            exit(1)
-
         name, type = self.dir.parseName(self.settings)
+        db, obj = self.findName(name, type)
+        xcheck = xnas_check(self, lightCheck = True, json = self.settings['json'])
+        if xcheck.ErrorExitCmd(xcheck.check(), self.settings, obj):
+            if self.settings["json"]:
+                self.printJsonResult(False)
+            else:
+                self.printMarked("Unable to list folder")
+            exit(1)
+        del xcheck
+
         folder, filter = self.dir.pd(name, type, self.settings["loc"])
         if self.settings["json"]:
             self.printJson([folder])
