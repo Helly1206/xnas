@@ -62,12 +62,12 @@ then
     fi
     if [ -e "$SERVICEDIR/$SERVICESCRIPT" ]; then rm -f "$SERVICEDIR/$SERVICESCRIPT"; fi
 
-    echo "Uninstalling service $NAME"
     if [ -f "$SERVICEDIR/$BINDSCRIPT" ]; then
+        echo "Uninstalling service $NAME"
         systemctl stop $BINDSCRIPT
         systemctl disable $BINDSCRIPT
+        if [ -e "$SERVICEDIR/$BINDSCRIPT" ]; then rm -f "$SERVICEDIR/$BINDSCRIPT"; fi
     fi
-    if [ -e "$SERVICEDIR/$BINDSCRIPT" ]; then rm -f "$SERVICEDIR/$BINDSCRIPT"; fi
 
     echo "Uninstalling $NAME"
 
@@ -184,6 +184,10 @@ else
             echo -e "$XCDALIAS\n" >> $BASHRC
         fi
     fi
+
+    # Update db
+    echo "Update xnas settings to latest version"
+    $BINXNAS upd
 
 	#echo "Installing daemon $NAME"
 	#read -p "Do you want to install an automatic startup service for $NAME (Y/n)? " -n 1 -r

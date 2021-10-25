@@ -44,38 +44,36 @@ class xnas(xnas_engine):
         xnas_engine.__del__(self)
 
     def run(self, argv):
+        result = True
         checkResults = []
         checkList = []
         self.handleArgs(argv)
         if self.hasSetting(self.settings,"command") and (self.settings["command"] == "fix" or self.settings["command"] == "chk"):
-            xnasChk = xnas_check(self, noMsg = True, json = self.settings['json'])
+            xnasChk = xnas_check(self, noMsg = True, level = 0, json = self.settings['json'])
             checkResults = xnasChk.check()
             checkList = xnasChk.GetList()
             del xnasChk
-        elif self.hasSetting(self.settings,"command") and (self.settings["command"] == "shw" or self.settings["command"] == "rst" or self.settings["command"] == "srv"):
-            xnasChk = xnas_check(self, lightCheck = True, json = self.settings['json'])
+        elif not self.hasSetting(self.settings,"command") or (self.hasSetting(self.settings,"command") and
+                (self.settings["command"] == "shw" or self.settings["command"] == "rst" or self.settings["command"] == "srv")):
+            xnasChk = xnas_check(self, json = self.settings['json'])
             checkResults = xnasChk.check()
             checkList = xnasChk.GetList()
             del xnasChk
-        elif not self.hasSetting(self.settings,"command"):
-            xnasChk = xnas_check(self, lightCheck = True, json = self.settings['json'])
-            checkResults = xnasChk.check()
-            checkList = xnasChk.GetList()
-            del xnasChk
+        elif self.hasSetting(self.settings,"command") and (self.settings["command"] == "upd"):
+            pass #don't check on update
         else:
-            if xnas_check(self).check():
+            if xnas_check(self, level = 0).check():
                 if self.settings["json"]:
                     self.printJsonResult(False)
                 exit(1)
         if not self.hasSetting(self.settings,"command"):
             self.needSudo()
-            bindings = share(self).bindAll()
+            links = share(self).linkAll()
             if self.settings["json"]:
-                self.printJson(bindings)
+                self.printJson(links)
             else:
-                self.prettyPrintTable(bindings)
-            #try bindings anyway to keep things that still work working, check afterwards
-            xnas_check(self, json = self.settings['json']).check()
+                self.prettyPrintTable(links)
+            xnas_check(self, level = 0, json = self.settings['json']).check()
         elif self.settings["command"] == "fix":
             self.needSudo()
             if not checkResults:
@@ -103,11 +101,11 @@ class xnas(xnas_engine):
             if not self.hasSetting(self.settings,"type"):
                 self.parseError("Command [rst] requires a type argument")
             elif self.settings["type"] == "fstab":
-                retval = self.restoreFstab()
+                result = self.restoreFstab()
                 if self.settings["json"]:
-                    self.printJsonResult(retval)
+                    self.printJsonResult(result)
                 else:
-                    if retval:
+                    if result:
                         self.printMarked("Restored fstab")
                     else:
                         self.printMarked("Unable to restore fstab")
@@ -118,10 +116,23 @@ class xnas(xnas_engine):
             result = self.setServicesOptions()
             if self.settings["json"] and not "show" in self.settings and not "settings" in self.settings:
                 self.printJsonResult(result)
+        elif self.settings["command"] == "upd":
+            self.needSudo()
+            result = self.updateDB()
+            if self.settings["json"]:
+                self.printJsonResult(result)
+            else:
+                if result:
+                    self.printUnmarked("xnas settings updated")
+                else:
+                    self.printUnmarked("Unable update xnas settings")
         else:
             self.parseError("Unknown command argument")
+            result = False
             if self.settings["json"]:
-                self.printJsonResult(False)
+                self.printJsonResult(result)
+
+        exit(0 if result else 1)
 
     def handleArgs(self, argv):
         xargs = {"fix": "tries to fix reported errors",
@@ -129,16 +140,21 @@ class xnas(xnas_engine):
                  "shw": "shows all mounts, remotemounts, shares and netshares",
                  "rst": "restores backups [rst <type>] (type: fstab)",
                  "srv": "sets xservices options (restarts services)",
-                 "-": "binds shared folders during startup"}
+                 "upd": "update xnas settings to latest version",
+                 "-": "checks all shared folders"}
         xopts = {"backup": "backup id to restore <string> (rst) (auto = empty)",
                  "show": "show current dynmounts and their status (srv)",
                  "interval": "database reloading interval (srv) (default = 60 [s])",
                  "enable": "enables or disables xservices (srv) (default = true)",
                  "zfshealth": "disables degraded zfs pools (srv) (default = false)",
                  "removable": "dynmount devices not in fstab (srv) (default = false)",
+                 "afenable": "enables or disables autofix (srv) (default = true)",
+                 "afretries": "number of retries during autofix (srv) (default = 3)",
+                 "afinterval": "autofix retry interval (srv) (default = 60)",
                  "settings": "lists current settings (srv)"}
-        extra = ('xservices run as a service for dynmount and also handles emptying the cifs\n'
-        'recyclebin if required. See "interval", "enable" and "removable" option.\n'
+        extra = ('xservices run as a service for dynmount, autofix and also handles emptying\n'
+        'the cifs recyclebin if required. See "interval", "enable", "removable",\n'
+        '"afenable", "afretries" and "afinterval" options.\n'
         'xservices is always restarted after calling the "srv" command.\n'
         'Options may be entered as single JSON string using full name, e.g.\n'
         'xnas rst fstab \'{"backup": "2"}\'\n'
@@ -251,6 +267,9 @@ class xnas(xnas_engine):
             settings["dyninterval"] = 60
             settings["dynzfshealth"] = False
             settings["dynremovable"] = False
+            settings["autofixenable"] = True
+            settings["autofixretries"] = 3
+            settings["autofixinterval"] = 60
             updated = True
             self.addToGroup(groups.SETTINGS, settings)
 
@@ -275,6 +294,27 @@ class xnas(xnas_engine):
         if self.hasSetting(self.settings,"removable"):
             if settings["dynremovable"] != self.toBool(self.settings["removable"]):
                 settings["dynremovable"] = self.toBool(self.settings["removable"])
+                updated = True
+
+        if self.hasSetting(self.settings,"afenable"):
+            if settings["autofixenable"] != self.toBool(self.settings["afenable"]):
+                settings["autofixenable"] = self.toBool(self.settings["afenable"])
+                updated = True
+
+        if self.hasSetting(self.settings,"afretries"):
+            retries = self.toInt(self.settings["afretries"])
+            if not retries:
+                retries = 3
+            if settings["autofixretries"] != retries:
+                settings["autofixretries"] = retries
+                updated = True
+
+        if self.hasSetting(self.settings,"afinterval"):
+            afinterval = self.toInt(self.settings["afinterval"])
+            if not afinterval:
+                afinterval = 60
+            if settings["autofixinterval"] != afinterval:
+                settings["autofixinterval"] = afinterval
                 updated = True
 
         if updated or enaupd:
@@ -352,6 +392,82 @@ class xnas(xnas_engine):
             self.printJson(settings)
         else:
             self.prettyPrintTable(self.settings2Table(settings))
+
+    def updateDB(self):
+        retval = True
+
+        retval = self.updateDB1()
+
+        return retval
+
+    def updateDB1(self):
+        retval = True
+
+        mounts = self.checkGroup(groups.MOUNTS)
+        if mounts:
+            for name, mnt in mounts.items():
+                if not "mountpoint" in mnt:
+                    mnt["mountpoint"] = mount(self).getMountpoint(name)
+                if "dyn" in mnt:
+                    if mnt["dyn"] and not "method" in mnt:
+                        mnt["method"] = "dynmount"
+                    del mnt["dyn"]
+                if not "method" in mnt:
+                    entry = mount(self).getMntEntry(name)
+                    if entry:
+                        if not 'noauto' in entry['options']:
+                            mnt["method"] = "auto"
+                        else:
+                            mnt["method"] = "disabled"
+                    else:
+                        mnt["method"] = "disabled"
+
+        mounts = self.checkGroup(groups.REMOTEMOUNTS)
+        if mounts:
+            for name, mnt in mounts.items():
+                if not "mountpoint" in mnt:
+                    mnt["mountpoint"] = remotemount(self).getMountpoint(name)
+                if "dyn" in mnt:
+                    if mnt["dyn"] and not "method" in mnt:
+                        mnt["method"] = "dynmount"
+                    del mnt["dyn"]
+                if not "method" in mnt:
+                    entry = remotemount(self).getMntEntry(name)
+                    if entry:
+                        if not 'noauto' in entry['options']:
+                            mnt["method"] = "auto"
+                        else:
+                            mnt["method"] = "disabled"
+                    else:
+                        mnt["method"] = "disabled"
+
+        checkLinks = False
+        shares = self.checkGroup(groups.SHARES)
+        if shares:
+            for name, shr in shares.items():
+                if "uacc" in shr:
+                    # use this as trigger to remove bindings
+                    if share(self).legacyUnbind(name):
+                        checkLinks = True
+                        del shr["uacc"]
+                if "sacc" in shr:
+                    del shr["sacc"]
+
+        if checkLinks:
+            share(self).linkAll()
+
+        settings = self.checkGroup(groups.SETTINGS)
+        if settings:
+            if not "autofixenable" in settings:
+                settings["autofixenable"] = True
+            if not "autofixretries" in settings:
+                settings["autofixretries"] = 3
+            if not "autofixinterval" in settings:
+                settings["autofixinterval"] = 60
+
+        self.update()
+
+        return retval
 #########################################################
 
 ######################### MAIN ##########################

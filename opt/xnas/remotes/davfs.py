@@ -61,35 +61,54 @@ class davfs(object):
         return retval
 
     def setOptions(self, options, url, guest, access = "0777"):
+        changed = False
         for opt in DAVFSDEFOPT:
             if not opt in options:
                 options.append(opt)
+                changed = True
 
         for opt in options:
             if opt.startswith(DAVFSFILEOPT):
-                options.remove(opt)
+                try:
+                    val = opt.split("=")[1]
+                    if val != access:
+                        options.remove(opt)
+                        options.append("{}{}".format(DAVFSFILEOPT, access))
+                        changed = True
+                except:
+                    pass
                 break
         for opt in options:
             if opt.startswith(DAVFSDIROPT):
-                options.remove(opt)
+                try:
+                    val = opt.split("=")[1]
+                    if val != access:
+                        options.remove(opt)
+                        options.append("{}{}".format(DAVFSDIROPT, access))
+                        changed = True
+                except:
+                    pass
                 break
-        options.append("{}{}".format(DAVFSFILEOPT, access))
-        options.append("{}{}".format(DAVFSDIROPT, access))
 
         if guest:
             if not "guest" in options:
                 options.append("guest")
+                changed = False
         else:
             if "guest" in options:
                 options.remove("guest")
-        return options
+                changed = False
+        return changed
 
     def buildURL(self, https, server, sharename):
         if https:
             prefix = "https:"
         else:
             prefix = "http:"
-        url = "{}//{}.{}".format(prefix, self.fixSharename(sharename), self.fixServer(server))
+        if not sharename:
+            url = "{}//{}".format(prefix, self.fixServer(server))
+        else:
+            url = "{}//{}.{}".format(prefix, self.fixSharename(sharename), self.fixServer(server))
         return url.replace(" ","$20")
 
     def parseURL(self, url):
@@ -102,13 +121,21 @@ class davfs(object):
         except:
             pass
         try:
-            server = ".".join(url.split("//")[1].split(".")[1:]).strip()
+            try:
+                part = url.split("//")[1].split('/')[0].strip()
+            except:
+                part = url.split("//")[1].strip()
+            servpart = ".".join(part.split(".")[1:]).strip()
+            if servpart:
+                server = servpart + "/" + "/".join(url.split("//")[1].split("/")[1:]).strip()
+                sharename = part.split(".")[0].strip()
+            else:
+                server = url.split("//")[1].strip()
         except:
-            pass
-        try:
-            sharename = url.split("//")[1].split(".")[0].strip()
-        except:
-            pass
+            try:
+                server = url.split("//")[1].strip()
+            except:
+                pass
         return https, self.fixServer(server), self.fixSharename(sharename)
 
     def fixServer(self, server):

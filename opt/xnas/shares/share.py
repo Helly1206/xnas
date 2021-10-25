@@ -10,13 +10,11 @@
 import os
 import logging
 from copy import deepcopy
+from shares.link import link
 from mounts.mountfs import mountfs
 from mounts.mountpoint import mountpoint
 from common.stdin import stdin
 from common.xnas_engine import groups
-from remotes.davfs import davfs
-from remotes.cifs import cifs
-from remotes.nfs import nfs
 #########################################################
 
 ####################### GLOBALS #########################
@@ -30,16 +28,16 @@ from remotes.nfs import nfs
 #########################################################
 # Class : share                                         #
 #########################################################
-class share(mountfs, mountpoint):
+class share(link, mountpoint):
     def __init__(self, engine):
         self.engine = engine
         self.logger = logging.getLogger('xnas.xshare')
-        mountfs.__init__(self, self.logger)
+        link.__init__(self, self.logger)
         mountpoint.__init__(self, self.logger)
 
     def __del__(self):
         mountpoint.__del__(self)
-        mountfs.__del__(self)
+        link.__del__(self)
 
     def getShares(self):
         myshares = []
@@ -52,7 +50,6 @@ class share(mountfs, mountpoint):
                 myshare['remotemount'] = share['remotemount']
                 myshare['folder'] = share['folder']
                 myshare['enabled'] = share['enabled']
-                myshare['bound'] = self.isBound(key, True)
                 myshare['referenced'] = self.isReferenced(key, True)
                 myshare['sourced'] = self.isSourced(key, True)
                 if myshare:
@@ -99,19 +96,11 @@ class share(mountfs, mountpoint):
         if remotemount:
             db = self.engine.checkKey(groups.REMOTEMOUNTS, name)
             if db:
-                url = ""
-                if db['type'] == 'davfs':
-                    url = davfs(self.logger).buildURL(db['https'], db['server'], db['sharename'])
-                elif db['type'] == 'cifs':
-                    url = cifs(self.logger).buildURL(db['https'], db['server'], db['sharename'])
-                elif db['type'] == 'nfs':
-                    url = nfs(self.logger).buildURL(db['https'], db['server'], db['sharename'])
-                if url:
-                    sourceMountpoint = self.getMountPoint(url, True)
+                sourceMountpoint = db['mountpoint']
         else:
             db = self.engine.checkKey(groups.MOUNTS, name)
             if db:
-                sourceMountpoint = self.getMountPoint(db['uuid'], db['zfs'])
+                sourceMountpoint = db['mountpoint']
         return sourceMountpoint
 
     def isSourced(self, name, silent = False):
@@ -122,14 +111,15 @@ class share(mountfs, mountpoint):
         if db:
             src = self.getSourceMountpoint(db['xmount'], db['remotemount'])
         if src:
-            mounted = self.mounted(src)
-            if mounted:
-                srcdir = self.sourceDir(name, src)
-                isSrcd = self.exists(srcdir)
+            #mounted = mountfs(self.logger).isMounted(src)
+            #if mounted:
+            #    srcdir = self.sourceDir(name, src)
+            isSrcd = self.exists(src)
         if isSrcd and not silent:
             self.logger.warning("{} is sourced".format(name))
         return isSrcd
 
+    """
     def isBound(self, name, silent = False):
         isMounted = False
         isMounted = self.isMounted(self.engine.shareDir(name))
@@ -179,13 +169,15 @@ class share(mountfs, mountpoint):
         else:
             retval = True
         return retval
+    """
 
-    def ena(self, name, timeout = 5, verbose = True):
+    def ena(self, name, verbose = True):
         retval = False
         db = self.engine.checkKey(groups.SHARES, name)
         if db:
-            if self.isSourced(name, True):
-                retval = self.bnd(name, timeout, verbose)
+            retval = self.isSourced(name, True)
+        if retval:
+            retval = self.linkSingle(name)
         if retval:
             db['enabled'] = True
             if verbose:
@@ -194,16 +186,13 @@ class share(mountfs, mountpoint):
                 self.logger.warning("{} not enabled".format(name))
         return retval
 
-    def dis(self, name, force = False, timeout = 5, verbose = True):
+    def dis(self, name, verbose = True):
         retval = False
         db = self.engine.checkKey(groups.SHARES, name)
         if db:
-            #if not self.isReferenced(name): # or not self.isSourced(name):
-            retval = self.ubnd(name, True, force, timeout, verbose)
-            if timeout:
-                retval = True # Disable, even if unbound fails
+            if not self.isReferenced(name):
+                retval = self.unlink(self.engine.shareDir(name))
         if retval:
-            self.chMode(self.engine.shareDir(name), self.modeDisabled())
             db['enabled'] = False
             if verbose:
                 self.logger.info("{} disabled".format(name))
@@ -219,21 +208,21 @@ class share(mountfs, mountpoint):
             shareData['remotemount'] = db['remotemount']
             shareData['mountpoint'] = self.getSourceMountpoint(db['xmount'], db['remotemount'])
             shareData['folder'] = db['folder']
-            shareData['uacc'] = db['uacc']
-            shareData['sacc'] = db['sacc']
         return shareData
 
     def addSh(self, name):
         entryNew = {}
         newEntry = False
+        retval = True
 
-        # Create shares if not exists
-        retval = self.createDir(self.engine.shareDir(""))
         db = self.engine.checkKey(groups.SHARES, name)
         if retval:
             if db: # in db
                 if self.isReferenced(name):
                     self.logger.info("{} found in database, but is referenced. Remove reference first".format(name))
+                    retval = False
+                elif db['enabled']:
+                    self.logger.info("{} found in database, but is enabled. Disable first".format(name))
                     retval = False
                 else:
                     self.logger.info("{} found in database, editing content".format(name))
@@ -248,6 +237,7 @@ class share(mountfs, mountpoint):
             changed = self.makeEntry(entryNew)
             retval = self.checkEntry(entryNew, newEntry, changed)
 
+        """
         if changed and retval and not newEntry:
             if entryNew['enabled']:
                 retval = self.ubnd(name)
@@ -259,6 +249,7 @@ class share(mountfs, mountpoint):
                 self.create(self.engine.shareDir(name))
                 if retval:
                     self.logger.info("Created new shared folder: {}".format(self.engine.shareDir(name)))
+
         if retval:
             if entryNew['enabled']:
                 mode = self.setMode(entryNew['uacc'], entryNew['sacc'])
@@ -267,6 +258,7 @@ class share(mountfs, mountpoint):
             if mode != self.getMode(self.engine.shareDir(name)):
                 self.chMode(self.engine.shareDir(name), mode)
                 self.logger.info("Changed mountpoint mode: user {}, superuser {}".format(entryNew['uacc'], entryNew['sacc']))
+        """
 
         if retval:
             if db:
@@ -284,7 +276,7 @@ class share(mountfs, mountpoint):
                     if not retval:
                         self.logger.error("{} source doesn't exist: {}".format(name, entryNew['xmount']))
                 if retval:
-                    retval = self.bnd(name)
+                    retval = self.link(self.sourceDir(name), self.engine.shareDir(name))
                     if not retval:
                         self.logger.error("{} Error binding share".format(name))
         else:
@@ -296,10 +288,7 @@ class share(mountfs, mountpoint):
         retval = False
 
         if not self.isReferenced(name):
-            retval = self.ubnd(name)
-            if retval:
-                self.delete(self.engine.shareDir(name))
-                self.logger.info("Removed mountpoint: {}".format(self.engine.shareDir(name)))
+            retval = self.dis(name, False)
         if retval:
             self.logger.info("{} deleted".format(name))
             self.clr(name) # Remove from DB
@@ -307,23 +296,44 @@ class share(mountfs, mountpoint):
             self.logger.warning("{} not deleted".format(name))
         return retval
 
-    def bindAll(self):
+    def linkSingle(self, name, verbose = False):
+        retval = False
+        db = self.engine.checkKey(groups.SHARES, name)
+        if db:
+            retval = self.link(self.sourceDir(name), self.engine.shareDir(name))
+        if verbose and not retval:
+            self.logger.warning("{} not linked".format(name))
+        return retval
+
+    def linkAll(self, verbose = False):
         bndList = []
         shares = self.engine.checkGroup(groups.SHARES)
         if shares:
             for key, share in shares.items():
                 bndItem={}
                 bndItem['xhare'] = key
-                if self.isSourced(key, True) and share['enabled']:
-                    bndItem['bound'] = self.bnd(key)
+                if share['enabled']:
+                    bndItem['linked'] = self.link(self.sourceDir(key), self.engine.shareDir(key))
                 else:
-                    bndItem['bound'] = False
-                    if not share['enabled']:
-                        self.logger.info("{} not bound, share disabled".format(key))
-                    else:
-                        self.logger.warning("{} not bound, no valid source found".format(key))
+                    bndItem['linked'] = False
+                    if verbose:
+                        if not share['enabled']:
+                            self.logger.info("{} not linked, share disabled".format(key))
+                        else:
+                            self.logger.warning("{} not linked, no valid source found".format(key))
                 bndList.append(bndItem)
         return bndList
+
+    def legacyUnbind(self, name):
+        retval = True
+        mntfs = mountfs(self.logger)
+        if mntfs.isMounted(self.engine.shareDir(name)):
+            retval = mntfs.unbind(self.engine.shareDir(name), force = True, timeout = 5)
+        del mntfs
+        if retval and self.exists(self.engine.shareDir(name)):
+            retval = self.delete(self.engine.shareDir(name))
+
+        return retval
 
     ################## INTERNAL FUNCTIONS ###################
 
@@ -404,26 +414,6 @@ class share(mountfs, mountpoint):
         elif not "folder" in entry:
             changed = True
             entry['folder'] = ""
-        if "uacc" in self.engine.settings:
-            if "uacc" in entry:
-                echanged =  entry['uacc'] != self.engine.settings['uacc']
-            else:
-                echanged = True
-            changed = changed or echanged
-            entry['uacc'] = self.engine.settings['uacc']
-        elif not "uacc" in entry:
-            changed = True
-            entry['uacc'] = "rw"
-        if "sacc" in self.engine.settings:
-            if "sacc" in entry:
-                echanged =  entry['sacc'] != self.engine.settings['sacc']
-            else:
-                echanged = True
-            changed = changed or echanged
-            entry['sacc'] = self.engine.settings['sacc']
-        elif not "sacc" in entry:
-            changed = True
-            entry['sacc'] = "rw"
         if not "enabled" in entry:
             changed = True
             entry['enabled'] = True

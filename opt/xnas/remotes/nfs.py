@@ -52,10 +52,12 @@ class nfs(object):
 
     # No options for NFS
     def setOptions(self, options, url, guest, access = "0777"):
+        changed = False
         for opt in NFSDEFOPT:
             if not opt in options:
                 options.append(opt)
-        return options
+                changed = True
+        return changed
 
     def buildURL(self, https, server, sharename):
         url = "{}:{}".format(self.fixServer(server), self.fixSharename(sharename))

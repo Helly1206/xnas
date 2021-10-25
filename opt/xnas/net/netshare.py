@@ -73,19 +73,12 @@ class netshare(object):
                 mylist.append(myitem)
         return mylist
 
-    def getShare(self, name):
-        shr = ""
-        db = self.engine.checkKey(groups.SHARES, name)
-        if db:
-            shr = name
-        return shr
-
     def isSourced(self, name, silent = False):
         # Netshares can only be sourced by shares
         isSrcd = False
-        shr = self.getShare(name)
+        shr = self.engine.checkKey(groups.SHARES, name)
         if shr:
-            isSrcd = share(self.engine).isBound(shr, True)
+            isSrcd = shr['enabled']
         if isSrcd and not silent:
             self.logger.warning("{} is sourced".format(name))
         return isSrcd

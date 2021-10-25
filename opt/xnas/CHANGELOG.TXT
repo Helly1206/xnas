@@ -1,3 +1,15 @@
+[B]1.0.0[/B]
+- Fixed xcd not changing folder in case of errors
+- Fixed mountpoint error if not available
+- Fixed issue on cifs empty recycle bin age check
+- Fixed issue binding dynmount after enabling
+- Changed dynmount to method: disabled, startup, auto, dynmount and deprecated ena/ dis
+- Fixed not showing up xmounts in - and shw if device is not available
+- Added automount as option and some corresponding optinos
+- Changed xshare method from bind to link as this simplifies the code a lot
+- Added autofix to automatically fix xnas errors in xservices
+- Updated access levels for non zfs mounts
+
 [B]0.9.1[/B]
 - Fixed command failures on errors
 - Fixed smb vfs objects issue

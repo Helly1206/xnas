@@ -11,7 +11,7 @@ from common.shell import shell
 #########################################################
 
 ####################### GLOBALS #########################
-
+EXCLUDEMOUNTEDLIST = ["autofs"]
 #########################################################
 
 ###################### FUNCTIONS ########################
@@ -85,10 +85,14 @@ class mountfs(object):
         return self.unmount(mountpoint, "unbinding", force = force, timeout = timeout)
 
     def isMounted(self, mountpoint):
-        retval = True
+        retval = False
         cmd = "cat /proc/mounts|grep " + mountpoint
         try:
-            lines = shell().command(cmd)
+            lines = shell().command(cmd).splitlines()
+            for line in lines:
+                l = line.split(" ")
+                if not l[2].strip() in EXCLUDEMOUNTEDLIST:
+                    retval = True
         except Exception as e:
             retval = False
         return retval

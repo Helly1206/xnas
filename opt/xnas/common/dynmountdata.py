@@ -88,45 +88,23 @@ class dynmountdata(mountpoint, devices):
                 retval = self.delete(item['mountpoint'])
         return retval
 
-    def enableReferences(self, engine, name, enable, verbose = True):
-        refdata = []
-        retry = 0
+    def getReferences(self, engine, name):
+        refs = []
+        refsena = []
         refshares = engine.findAllInGroup(groups.SHARES, 'xmount', name)
         for key, refshare in refshares.items():
-            refdatum = {}
-            refdatum['key'] = key
-            if enable:
-                if not refshare['enabled']:
-                    # it may be the case that the system is enabled before the mount gets online
-                    # therefore give it some retries
-                    retval = False
-                    while not retval and retry < MAXENABLERETRIES:
-                        retval = share(engine).ena(key, verbose=verbose)
-                        if not retval:
-                            time.sleep(ENABLEDELAY)
-                        retry += 1
-                    refdatum['enabled'] = retval
-                    refdatum['changed'] = True
-                    engine.update()
-                else:
-                    refdatum['enabled'] = True
-                    refdatum['changed'] = False
-            else: # disable
-                if refshare['enabled']:
-                    retval = False
-                    while not retval and retry < MAXENABLERETRIES:
-                        retval = share(engine).dis(key, force=True, verbose=verbose)
-                        if not retval:
-                            time.sleep(ENABLEDELAY)
-                        retry += 1
-                    refdatum['enabled'] = not retval
-                    refdatum['changed'] = True
-                    engine.update()
-                else:
-                    refdatum['enabled'] = False
-                    refdatum['changed'] = False
-            refdata.append(refdatum)
-        return refdata
+            refs.append(key)
+            refsena.append(refshare['enabled'])
+        return refs, refsena
+
+    def checkReferences(self, engine, name, verbose = True):
+        refs, refsena = self.getReferences(engine, name)
+        i = 0
+        for ref, refena in zip(refs, refsena):
+            if refena:
+                share(engine).linkSingle(ref, True)
+
+        return refs, refsena
 
     def findInFstab(self, fsname, remote = False, fstabOnly = False):
         mountpoint = ""
@@ -165,19 +143,19 @@ class dynmountdata(mountpoint, devices):
         return fstype
 
     @classmethod
-    def addDynmount(cls, xmount, mounted = False, mountpoint = "", references = [], refsenabled = [], health = None, healthOnly = False):
+    def addDynmount(cls, xmount, mounted = False, mountpoint = "", references = [], refsenabled = [], health = None):
         itemFound = False
         if not health:
             health = "ONLINE" if mounted else "OFFLINE"
-        if not mounted:
-            mountpoint = ""
         for item in cls.dynmounts:
             if item['xmount'] == xmount:
                 itemFound = True
                 item['health'] = health
-                if not healthOnly:
+                if mountpoint:
                     item['mountpoint'] = mountpoint
+                if references:
                     item['references'] = references
+                if refsenabled:
                     item['enabled'] = refsenabled
                 break
         if not itemFound:
@@ -198,6 +176,22 @@ class dynmountdata(mountpoint, devices):
                 break
         cls.monUpdate()
 
+    @classmethod
+    def getDynmount(cls, xmount):
+        dmitem = {}
+        for item in cls.dynmounts:
+            if item['xmount'] == xmount:
+                dmitem = item
+                break
+        return dmitem
+
+    @classmethod
+    def getDynmountMounted(cls, xmount):
+        mounted = False
+        item = cls.getDynmount(xmount)
+        if item:
+            mounted = (item['health'] != "OFFLINE")
+        return mounted
 
     ################## INTERNAL FUNCTIONS ###################
 

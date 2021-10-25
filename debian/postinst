@@ -2,7 +2,6 @@
 
 NAME="xnas"
 SERVICENAME="xservices"
-BINDSCRIPT="$NAME.service"
 SERVICESCRIPT="$SERVICENAME.service"
 SERVICEDIR="/etc/systemd/system"
 ETCDIR="/etc"
@@ -66,11 +65,10 @@ if [ -n $BASHRC ]; then
     fi
 fi
 
-echo "Install automatic startup service for $NAME"
-if [ -f "$SERVICEDIR/$BINDSCRIPT" ]; then
-    systemctl enable $BINDSCRIPT
-    systemctl start $BINDSCRIPT
-fi
+echo "Update xnas settings to latest version"
+$BINXNAS upd
+
+echo "Install automatic startup service for $SERVICENAME"
 if [ -f "$SERVICEDIR/$SERVICESCRIPT" ]; then
     systemctl enable $SERVICESCRIPT
     systemctl start $SERVICESCRIPT

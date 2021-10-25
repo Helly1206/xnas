@@ -61,37 +61,60 @@ class cifs(object):
         return retval
 
     def setOptions(self, options, url, guest, access = "0777"):
+        changed = False
         for opt in CIFSDEFOPT:
             if not opt in options:
+                changed = True
                 options.append(opt)
 
         for opt in options:
             if opt.startswith(CIFSFILEOPT):
-                options.remove(opt)
+                try:
+                    val = opt.split("=")[1]
+                    if val != access:
+                        options.remove(opt)
+                        options.append("{}{}".format(CIFSFILEOPT, access))
+                        changed = True
+                except:
+                    pass
                 break
         for opt in options:
             if opt.startswith(CIFSDIROPT):
-                options.remove(opt)
+                try:
+                    val = opt.split("=")[1]
+                    if val != access:
+                        options.remove(opt)
+                        options.append("{}{}".format(CIFSDIROPT, access))
+                        changed = True
+                except:
+                    pass
                 break
-        options.append("{}{}".format(CIFSFILEOPT, access))
-        options.append("{}{}".format(CIFSDIROPT, access))
 
         if guest:
             if not "guest" in options:
                 options.append("guest")
+                changed = True
             for opt in options:
                 if opt.startswith(CIFSCREDOPT):
                     options.remove(opt)
+                    changed = True
                     break
         else:
             if "guest" in options:
                 options.remove("guest")
+                changed = True
             for opt in options:
                 if opt.startswith(CIFSCREDOPT):
-                    options.remove(opt)
+                    try:
+                        val = opt.split("=")[1]
+                        if val != self.getCredsFile(url):
+                            options.remove(opt)
+                            options.append("{}{}".format(CIFSCREDOPT, self.getCredsFile(url)))
+                            changed = True
+                    except:
+                        pass
                     break
-            options.append("{}{}".format(CIFSCREDOPT, self.getCredsFile(url)))
-        return options
+        return changed
 
     def buildURL(self, https, server, sharename):
         url = "//{}/{}".format(self.fixServer(server), self.fixSharename(sharename))

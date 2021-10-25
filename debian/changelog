@@ -1,3 +1,18 @@
+xnas (1.00) stable; urgency=low
+
+  * Fixed xcd not changing folder in case of errors
+  * Fixed mountpoint error if not available
+  * Fixed issue on cifs empty recycle bin age check
+  * Fixed issue binding dynmount after enabling
+  * Changed dynmount to method: disabled, startup, auto, dynmount and deprecated ena/ dis
+  * Fixed not showing up xmounts in - and shw if device is not available
+  * Added automount as option and some corresponding optinos
+  * Changed xshare method from bind to link as this simplifies the code a lot
+  * Added autofix to automatically fix xnas errors in xservices
+  * Updated access levels for non zfs mounts
+
+ -- Helly1206 <hellyrulez@hotmail.com>  Sun, 26 Sep 2021 08:39:19 +0100
+
 xnas (0.91) stable; urgency=low
 
   * Fixed command failures on errors

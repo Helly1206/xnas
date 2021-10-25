@@ -43,7 +43,8 @@ class cifsemptybin(object):
 
     def terminate(self):
         self.stop()
-        self.timer.join(5)
+        if self.timer:
+            self.timer.join(5)
         del self.timer
 
     ################## INTERNAL FUNCTIONS ###################
@@ -64,7 +65,8 @@ class cifsemptybin(object):
             self.isRunning = True
 
     def stop(self):
-        self.timer.cancel()
+        if self.timer:
+            self.timer.cancel()
         self.isRunning = False
 
     def run(self):
@@ -118,8 +120,8 @@ class cifsemptybin(object):
                     if stat.S_ISDIR(info.st_mode):
                         self.loopFolderRemove(newlocation, maxage)
                     else:
+                        age = self.getAge(info.st_atime)
                         if self.verbose:
-                            age = self.getAge(info.st_atime)
                             self.logger.info("File '{}' has age of {} days".format(entry.name, age))
                         if age > maxage:
                             try:

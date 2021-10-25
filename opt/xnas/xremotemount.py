@@ -34,9 +34,10 @@ class xremotemount(xnas_engine):
         xnas_engine.__del__(self)
 
     def run(self, argv):
+        result = True
         self.handleArgs(argv)
         Remotemount = remotemount(self, self.settings['human'])
-        xcheck = xnas_check(self, Remotemount = Remotemount, lightCheck = True, json = self.settings['json'])
+        xcheck = xnas_check(self, Remotemount = Remotemount, json = self.settings['json'])
         if xcheck.ErrorExit(xcheck.check(), self.settings, NAMECHECK):
             if self.settings["json"]:
                 self.printJsonResult(False)
@@ -102,12 +103,16 @@ class xremotemount(xnas_engine):
                 self.printJsonResult(result)
         elif self.settings["command"] == "ena":
             self.needSudo()
-            result = Remotemount.ena(self.settings["name"])
+            #result = Remotemount.ena(self.settings["name"])
+            self.parseError("Command deprecated, use --method option instead")
+            result = False
             if self.settings["json"]:
                 self.printJsonResult(result)
         elif self.settings["command"] == "dis":
             self.needSudo()
-            result = Remotemount.dis(self.settings["name"])
+            #result = Remotemount.dis(self.settings["name"])
+            self.parseError("Command deprecated, use --method option instead")
+            result = False
             if self.settings["json"]:
                 self.printJsonResult(result)
         elif self.settings["command"] == "shw":
@@ -131,8 +136,10 @@ class xremotemount(xnas_engine):
                 self.printValues(url)
         else:
             self.parseError("Unknown command argument")
+            result = False
             if self.settings["json"]:
-                self.printJsonResult(False)
+                self.printJsonResult(result)
+        exit(0 if result else 1)
 
     def nameRequired(self):
         if self.hasSetting(self.settings,"command"):
@@ -146,8 +153,6 @@ class xremotemount(xnas_engine):
                  "mnt": "mounts a remotemount [mnt <name>]",
                  "umnt": "unmounts a remotemount if not referenced [umnt <name>]",
                  "clr": "removes a remotemount, but leaves fstab [clr <name>]",
-                 "ena": "enables a remotemount during boot [ena <name>]",
-                 "dis": "disables a remotemount during boot [dis <name>]",
                  "shw": "shows current remotemount settings [shw <name>]",
                  "lst": "lists xremotemount compatible fstab entries [lst]",
                  "url": "prints url of a <name> or <server>, <sharename> [url]",
@@ -160,7 +165,6 @@ class xremotemount(xnas_engine):
                  "mountpoint": "mountpoint <string> (add)",
                  "type": "type <string> (davfs, cifs, nfs or nfs4) (add)",
                  "options": "extra options, besides _netdev <string> (add)",
-                 "auto": "mount auto <boolean> (add)",
                  "rw": "mount rw <boolean> (add)",
                  "freq": "dump value <value> (add)",
                  "pass": "mount order <value> (add)",
@@ -168,12 +172,19 @@ class xremotemount(xnas_engine):
                  "sacc": "superuser access level (,r,w) (default = rw) (add)",
                  "username": "remote mount access username (guest if omitted) (add)",
                  "password": "remote mount access password (add)",
-                 "dynmount": "dynamically mount when available <boolean> (add)"}
+                 "method": "mount method <string> (see below) (add)",
+                 "idletimeout": "unmount when idle timeout <int> (default = 30) (add)",
+                 "timeout": "mounting timeout <int> (default = 10) (add)"}
         extra = ('URL generation from settings:\n'
         'davfs: <https>://<sharename>.<server>, e.g. https://test.myserver.com/dav.php/\n'
         'cifs : //<server>/<sharename>        , e.g. //192.168.1.1/test\n'
         'nfs  : server:<sharename>            , e.g. 192.168.1.1:/test\n'
         '"nfs4" is prefered as type for nfs, "nfs" as type refers to nfs3\n'
+        'Mount methods:\n'
+        'disabled: do not mount\n'
+        'startup : mount from fstab during startup\n'
+        'auto    : auto mount from fstab when accessed (default)\n'
+        'dynmount: dynamically mount when available\n'
         'Options may be entered as single JSON string using full name, e.g.\n'
         'xremotemount add test \'{"server": "192.168.1.1", "sharename": "test", \n'
         '                   "mountpoint": "/mnt/test", "type": "cifs", \n'
@@ -203,7 +214,7 @@ class xremotemount(xnas_engine):
         self.settingsBool(self.settings, 'json')
         self.settingsBool(self.settings, 'interactive')
         self.settingsBool(self.settings, 'human')
-        self.settingsBool(self.settings, 'auto', False)
+        #self.settingsBool(self.settings, 'auto', False)
         self.settingsBool(self.settings, 'rw', False)
         self.settingsBool(self.settings, 'https', False)
         self.settingsInt(self.settings, 'freq', False)
@@ -212,7 +223,6 @@ class xremotemount(xnas_engine):
         self.settingsStr(self.settings, 'sacc', False)
         self.settingsStr(self.settings, 'username', False)
         self.settingsStr(self.settings, 'password', False)
-        self.settingsBool(self.settings, 'dynmount', False)
 
         self.nameRequired()
 

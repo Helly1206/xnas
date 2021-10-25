@@ -34,9 +34,10 @@ class xshare(xnas_engine):
         xnas_engine.__del__(self)
 
     def run(self, argv):
+        result = True
         self.handleArgs(argv)
         Share = share(self)
-        xcheck = xnas_check(self, Share = Share, lightCheck = True, json = self.settings['json'])
+        xcheck = xnas_check(self, Share = Share, json = self.settings['json'])
         if xcheck.ErrorExit(xcheck.check(), self.settings, NAMECHECK):
             if self.settings["json"]:
                 self.printJsonResult(False)
@@ -66,12 +67,16 @@ class xshare(xnas_engine):
                 self.printJsonResult(result)
         elif self.settings["command"] == "bnd":
             self.needSudo()
-            result = Share.bnd(self.settings["name"])
+            #result = Share.bnd(self.settings["name"])
+            self.parseError("Command obsolete, use ena/ dis to bind/ unbind a share")
+            result = False
             if self.settings["json"]:
                 self.printJsonResult(result)
         elif self.settings["command"] == "ubnd":
             self.needSudo()
-            result = Share.ubnd(self.settings["name"])
+            #result = Share.ubnd(self.settings["name"])
+            self.parseError("Command obsolete, use ena/ dis to bind/ unbind a share")
+            result = False
             if self.settings["json"]:
                 self.printJsonResult(result)
         elif self.settings["command"] == "ena":
@@ -104,8 +109,10 @@ class xshare(xnas_engine):
                 self.prettyPrintTable(listData)
         else:
             self.parseError("Unknown command argument")
+            result = False
             if self.settings["json"]:
-                self.printJsonResult(False)
+                self.printJsonResult(result)
+        exit(0 if result else 1)
 
     def nameRequired(self):
         if self.hasSetting(self.settings,"command"):
@@ -118,15 +125,11 @@ class xshare(xnas_engine):
                  "ena": "enables a share [ena <name>]",
                  "dis": "disables a share [dis <name>]",
                  "shw": "shows current share settings [shw <name>]",
-                 "bnd": "binds a share [bnd <name>]",
-                 "ubnd": "unbinds a share [ubd <name>]",
                  "lst": "lists xmounts and xremotemounts to share [lst]",
                  "-": "show shares and their status"}
         xopts = {"xmount": "xmount name to share <string> (add)",
                  "remotemount": "xmount is of remotemount type <boolean> (add)",
-                 "folder": "relative folder in xmount to share <string> (add)",
-                 "uacc": "users access level (,r,w) (default = rw) (add)",
-                 "sacc": "superuser access level (,r,w) (default = rw) (add)"}
+                 "folder": "relative folder in xmount to share <string> (add)"}
         extra = ('Options may be entered as single JSON string using full name, e.g.\n'
         'xshare add test \'{"xmount": "TEST", "folder": "/music"}\'\n'
         'Mind the single quotes to bind the JSON string.')
@@ -152,8 +155,7 @@ class xshare(xnas_engine):
 
         self.settings.update(optsnargs[0])
         self.settingsBool(self.settings, 'json')
-        self.settingsStr(self.settings, 'uacc', False)
-        self.settingsStr(self.settings, 'sacc', False)
+        self.settingsBool(self.settings, 'remotemount')
 
         self.nameRequired()
 

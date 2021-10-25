@@ -37,10 +37,11 @@ if [ -f "$SERVICEDIR/$SERVICESCRIPT" ]; then
     systemctl disable $SERVICESCRIPT
 fi
 
-echo "Uninstalling service $NAME"
 if [ -f "$SERVICEDIR/$BINDSCRIPT" ]; then
+    echo "Uninstalling service $NAME"
     systemctl stop $BINDSCRIPT
     systemctl disable $BINDSCRIPT
+    if [ -e "$SERVICEDIR/$BINDSCRIPT" ]; then rm -f "$SERVICEDIR/$BINDSCRIPT"; fi
 fi
 
 echo "Removing alias for xcd in interactive shells"

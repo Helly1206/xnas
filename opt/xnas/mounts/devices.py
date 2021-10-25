@@ -170,8 +170,8 @@ class devices(object):
                     if len(data) == 4:
                         entry = {}
                         entry['label'] = data[0]
-                        entry['size'] = data[1]
-                        entry['used'] = data[2]
+                        entry['size'] = data[1].replace(",",".")
+                        entry['used'] = data[2].replace(",",".")
                         entry['mountpoint'] = data[3]
                         self.blkzfsdevices.append(entry)
         except:

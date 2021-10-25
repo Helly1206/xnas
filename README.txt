@@ -1,11 +1,11 @@
-XNAS v0.9.1
+XNAS v0.9.2
 
 XNAS -- Extended NAS functionality on a linux computer
 ==== == ======== === ============= == = ===== ========
 
 XNAS is a simple and lightweight solution to build a nas on almost any linux distribution (you need fstab, mount and samba or nfs)
-- The interface is commandline based (a webgui will be added in the future)
-- XNAS can run without daemons runnnig in the background, however xservices can be used to manage dynamic mounting and emptying cifs recylcebin
+- The interface is commandline based (a webgui is available for cockpit: cockpit-xnas)
+- XNAS can run without daemons runnnig in the background, however xservices can and will be used to manage dynamic mounting and emptying cifs recylcebin
 - XNAS is able to handle ZFS mounts
 - XNAS can handle remote mounts of type cifs, nfs or davfs
 
@@ -49,21 +49,26 @@ xnas <arguments> <options>
     shw           : shows all mounts, remotemounts, shares and netshares
     rst           : restores backups [rst <type>] (type: fstab)
     srv           : sets xservices options (restarts services)
-    <no arguments>: binds shared folders during startup
+    upd           : update xnas settings to latest version
+    <no arguments>: checks all shared folders
 <options>:
-    -h, --help     : this help file
-    -v, --version  : print version information
-    -j, --json     : display output in JSON format
-    -b, --backup   : backup id to restore <string> (rst) (auto = empty)
-    -s, --show     : show current dynmounts and their status (srv)
-    -i, --interval : database reloading interval (srv) (default = 60 [s])
-    -e, --enable   : enables or disables xservices (srv) (default = true)
-    -z, --zfshealth: disables degraded zfs pools (srv) (default = false)
-    -r, --removable: dynmount devices not in fstab (srv) (default = false)
-    -S, --settings : lists current settings (srv)
+    -h, --help      : this help file
+    -v, --version   : print version information
+    -j, --json      : display output in JSON format
+    -b, --backup    : backup id to restore <string> (rst) (auto = empty)
+    -s, --show      : show current dynmounts and their status (srv)
+    -i, --interval  : database reloading interval (srv) (default = 60 [s])
+    -e, --enable    : enables or disables xservices (srv) (default = true)
+    -z, --zfshealth : disables degraded zfs pools (srv) (default = false)
+    -r, --removable : dynmount devices not in fstab (srv) (default = false)
+    -a, --afenable  : enables or disables autofix (srv) (default = true)
+    -A, --afretries : number of retries during autofix (srv) (default = 3)
+    -f, --afinterval: autofix retry interval (srv) (default = 60)
+    -S, --settings  : lists current settings (srv)
 
-xservices run as a service for dynmount and also handles emptying the cifs
-recyclebin if required. See "interval", "enable" and "removable" option.
+xservices run as a service for dynmount, autofix and also handles emptying
+the cifs recyclebin if required. See "interval", "enable", "removable",
+"afenable", "afretries" and "afinterval" options.
 xservices is always restarted after calling the "srv" command.
 Options may be entered as single JSON string using full name, e.g.
 xnas rst fstab '{"backup": "2"}'
@@ -79,8 +84,6 @@ xmount <arguments> <options>
     mnt           : mounts a mount [mnt <name>]
     umnt          : unmounts a mount if not referenced [umnt <name>]
     clr           : removes a mount, but leaves fstab [clr <name>]
-    ena           : enables a mount during boot [ena <name>]
-    dis           : disables a mount during boot [dis <name>]
     lst           : lists xmount compatible fstab entries [lst]
     avl           : show available compatible devices not in fstab [avl]
     <no arguments>: show mounts and their status
@@ -96,15 +99,21 @@ xmount <arguments> <options>
     -m, --mountpoint : mountpoint <string> (add)
     -t, --type       : type <string> (filesystem) (add)
     -o, --options    : extra options, besides default <string> (add)
-    -a, --auto       : mount auto <boolean> (add)
     -r, --rw         : mount rw <boolean> (add)
     -s, --ssd        : disk type is ssd <boolean> (add)
     -F, --freq       : dump value <value> (add)
     -p, --pass       : mount order <value> (add)
     -U, --uacc       : users access level (,r,w) (default = rw) (add)
     -S, --sacc       : superuser access level (,r,w) (default = rw) (add)
-    -d, --dyn        : dynamically mount when available <boolean> (add)
+    -M, --method     : mount method <string> (see below) (add)
+    -I, --idletimeout: unmount when idle timeout <int> (default = 0) (add)
+    -T, --timeout    : mounting timeout <int> (default = 0) (add)
 
+Mount methods:
+disabled: do not mount
+startup : mount from fstab during startup (default)
+auto    : auto mount from fstab when accessed
+dynmount: dynamically mount when available
 Options may be entered as single JSON string using full name, e.g.
 xmount add test '{"fsname": "/dev/sda1", "mountpoint": "/mnt/test",
                "type": "ext4"}'
@@ -120,8 +129,6 @@ xremotemount <arguments> <options>
     mnt           : mounts a remotemount [mnt <name>]
     umnt          : unmounts a remotemount if not referenced [umnt <name>]
     clr           : removes a remotemount, but leaves fstab [clr <name>]
-    ena           : enables a remotemount during boot [ena <name>]
-    dis           : disables a remotemount during boot [dis <name>]
     lst           : lists xremotemount compatible fstab entries [lst]
     url           : prints url of a <name> or <server>, <sharename> [url]
     <no arguments>: show remotemounts and their status
@@ -137,21 +144,27 @@ xremotemount <arguments> <options>
     -m, --mountpoint : mountpoint <string> (add)
     -T, --type       : type <string> (davfs, cifs, nfs or nfs4) (add)
     -o, --options    : extra options, besides _netdev <string> (add)
-    -a, --auto       : mount auto <boolean> (add)
     -r, --rw         : mount rw <boolean> (add)
     -f, --freq       : dump value <value> (add)
     -p, --pass       : mount order <value> (add)
     -u, --uacc       : users access level (,r,w) (default = rw) (add)
-    -A, --sacc       : superuser access level (,r,w) (default = rw) (add)
+    -a, --sacc       : superuser access level (,r,w) (default = rw) (add)
     -U, --username   : remote mount access username (guest if omitted) (add)
     -P, --password   : remote mount access password (add)
-    -d, --dyn        : dynamically mount when available <boolean> (add)
+    -M, --method     : mount method <string> (see below) (add)
+    -I, --idletimeout: unmount when idle timeout <int> (default = 30) (add)
+    -e, --timeout    : mounting timeout <int> (default = 10) (add)
 
 URL generation from settings:
 davfs: <https>://<sharename>.<server>, e.g. https://test.myserver.com/dav.php/
 cifs : //<server>/<sharename>        , e.g. //192.168.1.1/test
 nfs  : server:<sharename>            , e.g. 192.168.1.1:/test
 "nfs4" is prefered as type for nfs, "nfs" as type refers to nfs3
+Mount methods:
+disabled: do not mount
+startup : mount from fstab during startup
+auto    : auto mount from fstab when accessed (default)
+dynmount: dynamically mount when available
 Options may be entered as single JSON string using full name, e.g.
 xremotemount add test '{"server": "192.168.1.1", "sharename": "test",
                "mountpoint": "/mnt/test", "type": "cifs",
@@ -166,8 +179,6 @@ xshare <arguments> <options>
     del           : deletes a share [del <name>]
     ena           : enables a share [ena <name>]
     dis           : disables a share [dis <name>]
-    bnd           : binds a share [bnd <name>]
-    ubnd          : unbinds a share [ubd <name>]
     <no arguments>: show shares and their status
 <options>:
     -h, --help   : this help file
@@ -176,8 +187,6 @@ xshare <arguments> <options>
     -m, --mount  : mount name to share <string> (add)
     -t, --type   : mount or remotemount type to search <string> (add)
     -f, --folder : relative folder in mount to share <string> (add)
-    -u, --uacc   : users access level (,r,w) (default = rw) (add)
-    -s, --sacc   : superuser access level (,r,w) (default = rw) (add)
 
 Options may be entered as single JSON string using full name, e.g.
 xshare add test '{"mount": "TEST", "folder": "/music"}'
@@ -307,6 +316,8 @@ Dynmount:        dynamically mount mounts or remotemounts when they become
 Emptyrecyclebin: automatically delete old files from cifs recycle bin
                  Maximum age can be changed with: "xnetshare add ..."
                  The recyclebin is emptied every day at midnight
+Autofix:         Check for errors and automatically fix them
+                 Options can be changed with: "xnas srv ..."
 xservices can be enabled or disabled with "xnas srv -e
 
 xcd

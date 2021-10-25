@@ -37,9 +37,10 @@ class xnetshare(xnas_engine):
         xnas_engine.__del__(self)
 
     def run(self, argv):
+        result = True
         self.handleArgs(argv)
         Netshare = netshare(self)
-        xcheck = xnas_check(self, Net = Netshare, lightCheck = True, json = self.settings['json'])
+        xcheck = xnas_check(self, Net = Netshare, json = self.settings['json'])
         if xcheck.ErrorExit(xcheck.check(), self.settings, NAMECHECK):
             if self.settings["json"]:
                 self.printJsonResult(False)
@@ -59,6 +60,7 @@ class xnetshare(xnas_engine):
                     self.printJson(result)
                 else:
                     self.prettyPrintTable(self.settings2Table(result))
+                result = True
             else:
                 if result:
                     self.update()
@@ -101,30 +103,36 @@ class xnetshare(xnas_engine):
             if self.settings["json"]:
                 if self.hasSetting(self.settings, "settings"):
                     self.printJson(result)
+                    result = True
                 else:
                     self.printJsonResult(result)
             elif self.hasSetting(self.settings, "settings"):
                 self.prettyPrintTable(self.settings2Table(result))
+                result = True
         elif self.settings["command"] == "hms":
             self.needSudo()
             result = Netshare.homes()
             if self.settings["json"]:
                 if self.hasSetting(self.settings, "settings"):
                     self.printJson(result)
+                    result = True
                 else:
                     self.printJsonResult(result)
             elif self.hasSetting(self.settings, "settings"):
                 self.prettyPrintTable(self.settings2Table(result))
+                result = True
         elif self.settings["command"] == "usr":
             self.needSudo()
             result = Netshare.users(self.settings["name"])
             if self.settings["json"]:
                 if self.settings["name"].lower() == "list" or self.settings["name"].lower() == "avl":
                     self.printJson(result)
+                    result = True
                 else:
                     self.printJsonResult(result)
             elif self.settings["name"].lower() == "list" or self.settings["name"].lower() == "avl":
                 self.prettyPrintTable(result)
+                result = True
             elif self.settings["name"].lower() == "exists":
                 if result:
                     self.printMarked("User exists")
@@ -136,10 +144,12 @@ class xnetshare(xnas_engine):
             if self.settings["json"]:
                 if self.hasSetting(self.settings, "list"):
                     self.printJson(result)
+                    result = True
                 else:
                     self.printJsonResult(result)
             elif self.hasSetting(self.settings, "list"):
                 self.prettyPrintTable(result)
+                result = True
         elif self.settings["command"] == "rfr":
             self.needSudo()
             result = Netshare.refresh()
@@ -171,8 +181,10 @@ class xnetshare(xnas_engine):
                 self.prettyPrintTable(ipData)
         else:
             self.parseError("Unknown command argument")
+            result = False
             if self.settings["json"]:
-                self.printJsonResult(False)
+                self.printJsonResult(result)
+        exit(0 if result else 1)
 
     def nameRequired(self):
         if self.hasSetting(self.settings,"command"):

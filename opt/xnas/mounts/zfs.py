@@ -147,7 +147,7 @@ class zfs(object):
 
     def dis(self, pool):
         retval = True
-        cmd = "zfs set canmount=off " + pool
+        cmd = "zfs set canmount=noauto " + pool # should no be off
         try:
             shell().command(cmd)
         except Exception as e:
@@ -199,7 +199,9 @@ class zfs(object):
             changed = True
             entry['type'] = "none"
         if "options" in settings:
-            doptions = list(map(str.strip, settings['options'].split(","))).remove("");
+            doptions = list(map(str.strip, settings['options'].split(",")))
+            while "" in doptions:
+                doptions.remove("")
             if not doptions:
                 doptions = []
             soptions = self.getExtraOptions(doptions)
@@ -215,8 +217,8 @@ class zfs(object):
             if ochanged:
                 options = soptions.extend(self.getExtraOptions(options, True))
                 changed = True
-        if "auto" in settings:
-            if settings['auto']:
+        if "method" in settings:
+            if settings['method'] == "startup":
                 if "noauto" in options:
                     changed = True
                     options.remove("noauto")
@@ -417,7 +419,7 @@ class zfs(object):
         elif not "noatime" in opts and "noatime" in curopts:
             self.setOpt(pool, "atime", "on")
         if "noauto" in opts and not "noauto" in curopts:
-            self.setOpt(pool, "canmount", "off")
+            self.setOpt(pool, "canmount", "noauto") # not off
         elif not "noauto" in opts and "noauto" in curopts:
             self.setOpt(pool, "canmount", "on")
         return True

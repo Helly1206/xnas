@@ -116,7 +116,10 @@ class mountpoint(object):
     def getMode(self, mountpoint):
         mode = DISABLEDMODE
         if mountpoint:
-            mode = os.stat(mountpoint).st_mode & MOUNTPOINTMODE
+            try:
+                mode = os.stat(mountpoint).st_mode & MOUNTPOINTMODE
+            except:
+                pass
         return mode
 
     def getUacc(self, mode):
@@ -145,9 +148,12 @@ class mountpoint(object):
             lz = "0"
         else:
             lz = ""
-        smode = "{0:o}".format(mode)
+        smode = "{0:03o}".format(mode)
 
         return "{}{}".format(lz, smode)
+
+    def umask(self, mode):
+        return ~mode & 0o0777
 
     def createDir(self, dir, mode = SUWURMODE):
         retval = False

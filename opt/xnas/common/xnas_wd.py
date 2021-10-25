@@ -299,7 +299,7 @@ class ZfsEmitter(EventEmitter):
 
                     if health == "ONLINE" or (health == "DEGRADED" and not self.deleteDegraded):
                         if not self.zfs.isMounted(pool):
-                            health = "UNMOUNTED"
+                            health = "OFFLINE"
                         if pool in self.poolHealth:
                             if self.poolHealth[pool] != health:
                                 self.queue_event(FileCreatedEvent({pool: health}))

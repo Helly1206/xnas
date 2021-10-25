@@ -15,11 +15,12 @@ import signal
 from threading import Timer, Lock
 from common.xnas_engine import groups
 from common.xnas_engine import xnas_engine
-from common.xnas_check import xnas_check
+from common.xnas_autofix import xnas_autofix
 from common.shell import shell
 from net.cifsemptybin import cifsemptybin
 from mounts.dynmount import dynmount
 from remotes.dynmountremote import dynmountremote
+from shares.share import share
 #########################################################
 
 ####################### GLOBALS #########################
@@ -36,6 +37,7 @@ class xservices(xnas_engine):
         xnas_engine.__init__(self, "xservices")
         self.settings = {}
         self.mutex = Lock()
+        self.autofix = None
         self.cifsemptybin = None
         self.dynmount = None
         self.dynmountremote = None
@@ -50,6 +52,8 @@ class xservices(xnas_engine):
 
     def exitSignal(self, signum = 0, frame = 0):
         self.logger.info("stopping xservices")
+        if self.autofix:
+            self.autofix.terminate()
         if self.cifsemptybin:
             self.cifsemptybin.terminate()
         if self.dynmount:
@@ -82,8 +86,6 @@ class xservices(xnas_engine):
         checkResults = []
         result = ""
         self.handleArgs(argv)
-        if xnas_check(self, lightCheck = True).check():
-            self.logger.warning("Running xservices with errors, service may have limited performance")
 
         if self.checkInstanceRunning():
             self.logger.info("Another instance of xservices is already running, exit ...")
@@ -106,9 +108,22 @@ class xservices(xnas_engine):
         if removable == None:
             removable = False
 
+        autofixenable = self.checkKey(groups.SETTINGS,"autofixenable")
+        if autofixenable == None:
+            autofixenable = True
+
+        autofixretries = self.checkKey(groups.SETTINGS,"autofixretries")
+        if autofixretries == None:
+            autofixretries = 3
+
+        autofixinterval = self.checkKey(groups.SETTINGS,"autofixinterval")
+        if autofixinterval == None:
+            autofixinterval = 60
+
         self.start()
 
         if self.checkKey(groups.SETTINGS,"srvenable"):
+            self.autofix = xnas_autofix(self, self.verbose, autofixenable, autofixretries, autofixinterval)
             self.cifsemptybin = cifsemptybin(self, self.verbose)
             self.dynmount = dynmount(self, self.verbose, zfshealth, removable)
             self.dynmountremote = dynmountremote(self, self.verbose)
@@ -128,6 +143,8 @@ class xservices(xnas_engine):
                  '    Emptyrecyclebin: automatically delete old files from cifs recycle bin\n'
                  '                     Maximum age can be changed with: "xnetshare add ..."\n'
                  '                     The recyclebin is emptied every day at midnight\n'
+                 '    Autofix:         Check for errors and automatically fix them\n'
+                 '                     Options can be changed with: "xnas srv ..."\n'
                  'xservices can be enabled or disabled with "xnas srv -e"')
         self.fillSettings(self.parseOpts(argv, xopts, xargs, extra), xopts)
 
@@ -162,6 +179,21 @@ class xservices(xnas_engine):
         if self.srvInterval == None:
             self.srvInterval = 60
 
+        if self.autofix:
+            autofixenable = self.checkKey(groups.SETTINGS,"autofixenable")
+            if autofixenable == None:
+                autofixenable = True
+
+            autofixretries = self.checkKey(groups.SETTINGS,"autofixretries")
+            if autofixretries == None:
+                autofixretries = 3
+
+            autofixinterval = self.checkKey(groups.SETTINGS,"autofixinterval")
+            if autofixinterval == None:
+                autofixinterval = 60
+
+            self.autofix.update(autofixenable, autofixretries, autofixinterval)
+
         if self.dynmountremote:
             self.dynmountremote.updateUrlList()
 
@@ -174,7 +206,7 @@ class xservices(xnas_engine):
             if removable == None:
                 removable = False
             self.dynmount.update(zfshealth, removable)
-            self.dynmount.updateZfsList()
+            self.dynmount.updateList()
 
         self.start()
         self.mutex.release()

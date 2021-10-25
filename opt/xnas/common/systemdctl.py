@@ -21,6 +21,7 @@ CTLDISABLE   = SYSTEMCTL + " disable"
 CTLSTATUS    = SYSTEMCTL + " status"
 CTLISACTIVE  = SYSTEMCTL + " is-active"
 CTLISENABLED = SYSTEMCTL + " is-enabled"
+CTLDAEMONRLD = SYSTEMCTL + " daemon-reload"
 
 #########################################################
 
@@ -139,6 +140,17 @@ class systemdctl(object):
         retval = False
         if self.available():
             cmd = "{} {}".format(CTLISENABLED, service)
+            try:
+                shell().command(cmd)
+                retval = True
+            except:
+                pass
+        return retval
+
+    def daemonReload(self):
+        retval = False
+        if self.available():
+            cmd = "{}".format(CTLDAEMONRLD)
             try:
                 shell().command(cmd)
                 retval = True

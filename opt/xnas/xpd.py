@@ -41,7 +41,7 @@ class xpd(xnas_engine):
         self.handleArgs(argv)
         name, type = self.dir.parseName(self.settings)
         db, obj = self.findName(name, type)
-        xcheck = xnas_check(self, lightCheck = True, json = self.settings['json'])
+        xcheck = xnas_check(self, json = self.settings['json'])
         if xcheck.ErrorExitCmd(xcheck.check(), self.settings, obj):
             if self.settings["json"]:
                 self.printJsonResult(False)

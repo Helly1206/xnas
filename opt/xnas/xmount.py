@@ -34,9 +34,10 @@ class xmount(xnas_engine):
         xnas_engine.__del__(self)
 
     def run(self, argv):
+        result = True
         self.handleArgs(argv)
         Mount = mount(self, self.settings['human'])
-        xcheck = xnas_check(self, Mount = Mount, lightCheck = True, json = self.settings['json'])
+        xcheck = xnas_check(self, Mount = Mount, json = self.settings['json'])
         if xcheck.ErrorExit(xcheck.check(), self.settings, NAMECHECK):
             if self.settings["json"]:
                 self.printJsonResult(False)
@@ -102,12 +103,16 @@ class xmount(xnas_engine):
                 self.printJsonResult(result)
         elif self.settings["command"] == "ena":
             self.needSudo()
-            result = Mount.ena(self.settings["name"])
+            #result = Mount.ena(self.settings["name"])
+            self.parseError("Command obsolete, use --method option instead")
+            result = False
             if self.settings["json"]:
                 self.printJsonResult(result)
         elif self.settings["command"] == "dis":
             self.needSudo()
-            result = Mount.dis(self.settings["name"])
+            #result = Mount.dis(self.settings["name"])
+            self.parseError("Command obsolete, use --method option instead")
+            result = False
             if self.settings["json"]:
                 self.printJsonResult(result)
         elif self.settings["command"] == "shw":
@@ -136,8 +141,10 @@ class xmount(xnas_engine):
                 self.prettyPrintTable(blkdevices)
         else:
             self.parseError("Unknown command argument")
+            result = False
             if self.settings["json"]:
-                self.printJsonResult(False)
+                self.printJsonResult(result)
+        exit(0 if result else 1)
 
     def nameRequired(self):
         if self.hasSetting(self.settings,"command"):
@@ -151,8 +158,6 @@ class xmount(xnas_engine):
                  "mnt": "mounts a mount [mnt <name>]",
                  "umnt": "unmounts a mount if not referenced [umnt <name>]",
                  "clr": "removes a mount, but leaves fstab [clr <name>]",
-                 "ena": "enables a mount during boot [ena <name>]",
-                 "dis": "disables a mount during boot [dis <name>]",
                  "shw": "shows current mount settings [shw <name>]",
                  "lst": "lists xmount compatible fstab entries [lst]",
                  "avl": "show available compatible devices not in fstab [avl]",
@@ -166,15 +171,21 @@ class xmount(xnas_engine):
                  "mountpoint": "mountpoint <string> (add)",
                  "type": "type <string> (filesystem) (add)",
                  "options": "extra options, besides default <string> (add)",
-                 "auto": "mount auto <boolean> (add)",
                  "rw": "mount rw <boolean> (add)",
                  "ssd": "disk type is ssd <boolean> (add)",
                  "freq": "dump value <value> (add)",
                  "pass": "mount order <value> (add)",
                  "uacc": "users access level (,r,w) (default = rw) (add)",
                  "sacc": "superuser access level (,r,w) (default = rw) (add)",
-                 "dynmount": "dynamically mount when available <boolean> (add)"}
-        extra = ('Options may be entered as single JSON string using full name, e.g.\n'
+                 "method": "mount method <string> (see below) (add)",
+                 "idletimeout": "unmount when idle timeout <int> (default = 0) (add)",
+                 "timeout": "mounting timeout <int> (default = 0) (add)"}
+        extra = ('Mount methods:\n'
+        'disabled: do not mount\n'
+        'startup : mount from fstab during startup (default)\n'
+        'auto    : auto mount from fstab when accessed\n'
+        'dynmount: dynamically mount when available\n'
+        'Options may be entered as single JSON string using full name, e.g.\n'
         'xmount add test \'{"fsname": "/dev/sda1", "mountpoint": "/mnt/test", \n'
         '                   "type": "ext4"}\'\n'
         'Mind the single quotes to bind the JSON string.')
@@ -202,14 +213,12 @@ class xmount(xnas_engine):
         self.settingsBool(self.settings, 'json')
         self.settingsBool(self.settings, 'interactive')
         self.settingsBool(self.settings, 'human')
-        self.settingsBool(self.settings, 'auto', False)
         self.settingsBool(self.settings, 'rw', False)
         self.settingsBool(self.settings, 'ssd', False)
         self.settingsInt(self.settings, 'freq', False)
         self.settingsInt(self.settings, 'pass', False)
         self.settingsStr(self.settings, 'uacc', False)
         self.settingsStr(self.settings, 'sacc', False)
-        self.settingsBool(self.settings, 'dynmount', False)
 
         self.nameRequired()
 

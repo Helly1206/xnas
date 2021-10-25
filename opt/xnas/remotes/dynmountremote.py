@@ -33,6 +33,7 @@ class dynmountremote(mountfs, dynmountdata):
         self.engine    = engine
         self.verbose   = verbose
         self.logger    = logging.getLogger('xnas.dynmountremote')
+        self.xmounts   = []
         self.remote_wd = remote_wd(self.getUrlList(), self.onAdded, self.onDeleted)
         mountfs.__init__(self, self.logger)
         dynmountdata.__init__(self, self.logger)
@@ -67,24 +68,18 @@ class dynmountremote(mountfs, dynmountdata):
                     self.logger.info("{} already mounted".format(xmount))
                 else:
                     mounted = mountfs.mount(self, mountpoint)
-                    if mounted: # check reference
-                        self.logger.info("{} mounted".format(xmount))
+                    if mounted:
+                        self.logger.info("{} mounted as {}".format(xmount, self.getMethod(xmount)))
                     else:
                         self.logger.error("{} mounting failed".format(xmount))
                 if mounted: # check reference
-                    refdata = self.enableReferences(self.engine, xmount, True, self.verbose)
-                    if refdata:
-                        for refdatum in refdata:
-                            refs.append(refdatum['key'])
-                            refsena.append(refdatum['enabled'])
-                            if refdatum['enabled'] and refdatum['changed']:
-                                self.logger.info("{} reference found and enabled: {}".format(xmount, refdatum['key']))
-                            elif refdatum['enabled']:
-                                self.logger.info("{} reference found, already enabled: {}".format(xmount, refdatum['key']))
-                            else:
-                                self.logger.info("{} reference found, enabling failed: {}".format(xmount, refdatum['key']))
-                    elif self.verbose:
-                        self.logger.info("{} no reference found".format(xmount))
+                    refs, refsena = self.checkReferences(self.engine, xmount, self.verbose)
+                    if self.verbose:
+                        for ref,refena in zip(refs, refsena):
+                            if not refena:
+                                self.logger.info("{} reference found, but not enabled: {}".format(xmount, ref))
+                        if not refs:
+                            self.logger.info("{} no reference found".format(xmount))
                 dynmountdata.addDynmount(xmount, mounted, mountpoint, refs, refsena)
             else:
                 self.logger.warning("{} remotemount online but no available mountpoint found, not mounting".format(xmount))
@@ -101,36 +96,19 @@ class dynmountremote(mountfs, dynmountdata):
         if xmount:
             self.logger.info("{} remotemount offline".format(xmount))
             if mountpoint:
-                refs = []
-                refsena = []
                 if not self.isMounted(mountpoint):
                     mounted = False
                     self.logger.info("{} already unmounted".format(xmount))
                 else:
-                    refdata = self.enableReferences(self.engine, xmount, False, self.verbose)
-                    if refdata:
-                        for refdatum in refdata:
-                            refs.append(refdatum['key'])
-                            refsena.append(refdatum['enabled'])
-                            if not refdatum['enabled'] and refdatum['changed']:
-                                self.logger.info("{} reference found and disabled: {}".format(xmount, refdatum['key']))
-                            elif not refdatum['enabled']:
-                                self.logger.info("{} reference found, already disabled: {}".format(xmount, refdatum['key']))
-                            else:
-                                self.logger.info("{} reference found, disabling failed: {}".format(xmount, refdatum['key']))
-                    elif self.verbose:
-                        self.logger.info("{} no reference found".format(xmount))
+                    # leave references as they are
                     mounted = not mountfs.unmount(self, mountpoint, internal = True, force = True)
-                    if not mounted: # check reference
+                    if not mounted:
                         self.logger.info("{} unmounted".format(xmount))
                     else:
                         self.logger.error("{} unmounting failed".format(xmount))
-                if not mounted: # check reference
-                    refdata = self.enableReferences(self.engine, xmount, False, self.verbose)
-                    if self.verbose and not refdata:
-                        self.logger.info("{} no reference found".format(xmount))
+                if not mounted:
                     self.delMountpoint(url)
-                dynmountdata.addDynmount(xmount, mounted, mountpoint, refs, refsena)
+                dynmountdata.addDynmount(xmount, mounted, mountpoint)
             else:
                 self.logger.warning("{} remotemount offline but no available mountpoint found, not unmounting".format(xmount))
                 dynmountdata.addDynmount(xmount)
@@ -141,15 +119,30 @@ class dynmountremote(mountfs, dynmountdata):
     ################## INTERNAL FUNCTIONS ###################
 
     def getUrlList(self):
+        newxmounts = []
         urlList = []
-
         mounts = self.engine.checkGroup(groups.REMOTEMOUNTS)
         if mounts:
             for key, mount in mounts.items():
-                if mount['dyn']:
+                if mount['method'] == "dynmount":
                     url = self.getURL(mount)
                     if url:
                         urlList.append(url)
+                    refs, refsena = self.getReferences(self.engine, key)
+                    mounted = self.isMounted(mount['mountpoint'])
+                    dynmountdata.addDynmount(key, mounted, mount['mountpoint'], refs, refsena)
+                    newxmounts.append(key)
+                elif mount['method'] == "auto":
+                    refs, refsena = self.getReferences(self.engine, key)
+                    dynmountdata.addDynmount(key, False, mount['mountpoint'], refs, refsena, health = "AUTO")
+                    newxmounts.append(key)
+        for newxmount in newxmounts:
+            if not newxmount in self.xmounts:
+                self.xmounts.append(newxmount)
+        for xmount in self.xmounts:
+            if not xmount in newxmounts:
+                self.xmounts.remove(xmount)
+                dynmountdata.delDynmount(xmount)
         return urlList
 
     def getURL(self, db):
@@ -167,12 +160,19 @@ class dynmountremote(mountfs, dynmountdata):
         mounts = self.engine.checkGroup(groups.REMOTEMOUNTS)
         if mounts:
             for key, mount in mounts.items():
-                if mount['dyn']:
+                if mount['method'] == "dynmount":
                     mnturl = self.getURL(mount)
                     if mnturl == url:
                         xmount = key
                         break
         return xmount
+
+    def getMethod(self, xmount):
+        method = "dynmount"
+        mount = self.engine.checkKey(groups.REMOTEMOUNTS, xmount)
+        if mount:
+            method = mount['method']
+        return method
 
 ######################### MAIN ##########################
 if __name__ == "__main__":

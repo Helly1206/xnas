@@ -32,6 +32,7 @@ class dynmount(mountfs, dynmountdata):
         self.zfshealth = zfshealth
         self.removable = removable
         self.logger    = logging.getLogger('xnas.dynmount')
+        self.xmounts   = []
         self.device_wd = device_wd(self.onAdded, self.onDeleted)
         self.zfs_wd = zfs_wd(self.getZfsList(), self.zfshealth, self.onZfsAdded, self.onZfsDeleted)
         mountfs.__init__(self, self.logger)
@@ -55,7 +56,8 @@ class dynmount(mountfs, dynmountdata):
         self.zfshealth = zfshealth
         self.removable = removable
 
-    def updateZfsList(self):
+    def updateList(self):
+        self.getList()
         self.zfs_wd.updateList(self.getZfsList(), self.zfshealth)
 
     ####################### CALLBACKS #######################
@@ -76,29 +78,23 @@ class dynmount(mountfs, dynmountdata):
             elif mountpoint:
                 refs = []
                 refsena = []
-                if self.mounted(mountpoint): #mountfs.isMounted(self, mountpoint)
+                if self.isMounted(mountpoint):
                     mounted = True
                     self.logger.info("{} already mounted".format(xmount))
                 else:
                     mounted = mountfs.mount(self, mountpoint)
-                    if mounted: # check reference
-                        self.logger.info("{} mounted".format(xmount))
+                    if mounted:
+                        self.logger.info("{} mounted as {}".format(xmount, self.getMethod(xmount)))
                     else:
                         self.logger.error("{} mounting failed".format(xmount))
                 if mounted: # check reference
-                    refdata = self.enableReferences(self.engine, xmount, True, self.verbose)
-                    if refdata:
-                        for refdatum in refdata:
-                            refs.append(refdatum['key'])
-                            refsena.append(refdatum['enabled'])
-                            if refdatum['enabled'] and refdatum['changed']:
-                                self.logger.info("{} reference found and enabled: {}".format(xmount, refdatum['key']))
-                            elif refdatum['enabled']:
-                                self.logger.info("{} reference found, already enabled: {}".format(xmount, refdatum['key']))
-                            else:
-                                self.logger.info("{} reference found, enabling failed: {}".format(xmount, refdatum['key']))
-                    elif self.verbose:
-                        self.logger.info("{} no reference found".format(xmount))
+                    refs, refsena = self.checkReferences(self.engine, xmount, self.verbose)
+                    if self.verbose:
+                        for ref,refena in zip(refs, refsena):
+                            if not refena:
+                                self.logger.info("{} reference found, but not enabled: {}".format(xmount, ref))
+                        if not refs:
+                            self.logger.info("{} no reference found".format(xmount))
                 else:
                     self.logger.warning("{} mount device available but no available mountpoint found, not mounting".format(xmount))
                 dynmountdata.addDynmount(xmount, mounted, mountpoint, refs, refsena)
@@ -147,38 +143,21 @@ class dynmount(mountfs, dynmountdata):
             if zfs:
                 self.logger.info("{} device is an zfs device, not unmounting".format(xmount))
             elif mountpoint:
-                refs = []
-                refsena = []
-                if not self.mounted(mountpoint):
+                if not self.isMounted(mountpoint):
                     mounted = False
                     self.logger.info("{} already unmounted".format(xmount))
                 else:
-                    refdata = self.enableReferences(self.engine, xmount, False, self.verbose)
-                    if refdata:
-                        for refdatum in refdata:
-                            refs.append(refdatum['key'])
-                            refsena.append(refdatum['enabled'])
-                            if not refdatum['enabled'] and refdatum['changed']:
-                                self.logger.info("{} reference found and disabled: {}".format(xmount, refdatum['key']))
-                            elif not refdatum['enabled']:
-                                self.logger.info("{} reference found, already disabled: {}".format(xmount, refdatum['key']))
-                            else:
-                                self.logger.info("{} reference found, disabling failed: {}".format(xmount, refdatum['key']))
-                    elif self.verbose:
-                        self.logger.info("{} no reference found".format(xmount))
+                    # leave references as they are
                     mounted = not mountfs.unmount(self, mountpoint)
-                    if not mounted: # check reference
+                    if not mounted:
                         self.logger.info("{} unmounted".format(xmount))
                     else:
                         self.logger.error("{} unmounting failed".format(xmount))
-                if not mounted: # check reference
-                    refdata = self.enableReferences(self.engine, xmount, False, self.verbose)
-                    if self.verbose and not refdata:
-                        self.logger.info("{} no reference found".format(xmount))
+                if not mounted:
                     self.delMountpoint(fsname)
                 else:
                     self.logger.warning("{} mount device unavailable but no available mountpoint found, not unmounting".format(xmount))
-                dynmountdata.addDynmount(xmount, mounted, mountpoint, refs, refsena)
+                dynmountdata.addDynmount(xmount, mounted, mountpoint)
         else:
             if self.removable:
                 mountpoint, uuid = self.findMountpoint(fsname)
@@ -207,23 +186,15 @@ class dynmount(mountfs, dynmountdata):
             if xmount:
                 if zfs:
                     if poolHealth[uuid] != "UNMOUNTED":
-                        self.logger.info("{}: ZFS mount device is {}, enabling".format(xmount, poolHealth[uuid]))
-                        refs = []
-                        refsena = []
-                        refdata = self.enableReferences(self.engine, xmount, True, self.verbose)
-                        if refdata:
-                            for refdatum in refdata:
-                                refs.append(refdatum['key'])
-                                refsena.append(refdatum['enabled'])
-                                if refdatum['enabled'] and refdatum['changed']:
-                                    self.logger.info("{} reference found and enabled: {}".format(xmount, refdatum['key']))
-                                elif refdatum['enabled']:
-                                    self.logger.info("{} reference found, already enabled: {}".format(xmount, refdatum['key']))
-                                else:
-                                    self.logger.info("{} reference found, enabling failed: {}".format(xmount, refdatum['key']))
-                        elif self.verbose:
-                            self.logger.info("{} no reference found".format(xmount))
-                        dynmountdata.addDynmount(xmount, True, self.getMountPoint(uuid, True), refs, refsena, poolHealth[uuid])
+                        self.logger.info("{}: ZFS mount device is {}, enabling as {}".format(xmount, poolHealth[uuid], self.getMethod(xmount)))
+                        refs, refsena = self.checkReferences(self.engine, xmount, self.verbose)
+                        if self.verbose:
+                            for ref,refena in zip(refs, refsena):
+                                if not refena:
+                                    self.logger.info("{} reference found, but not enabled: {}".format(xmount, ref))
+                            if not ref:
+                                self.logger.info("{} no reference found".format(xmount))
+                        dynmountdata.addDynmount(xmount, True, self.getMountPoint(xmount), refs, refsena, poolHealth[uuid])
                     else:
                         if self.verbose:
                             self.logger.info("{}: ZFS mount device is not mounted, not enabling".format(xmount))
@@ -249,22 +220,8 @@ class dynmount(mountfs, dynmountdata):
                     if True:
                         self.logger.info("{}: ZFS mount device is {}, disabling".format(xmount, poolHealth[uuid]))
                         # I don't care whether the device is mounted for disabling
-                        refs = []
-                        refsena = []
-                        refdata = self.enableReferences(self.engine, xmount, False, self.verbose)
-                        if refdata:
-                            for refdatum in refdata:
-                                refs.append(refdatum['key'])
-                                refsena.append(refdatum['enabled'])
-                                if not refdatum['enabled'] and refdatum['changed']:
-                                    self.logger.info("{} reference found and disabled: {}".format(xmount, refdatum['key']))
-                                elif not refdatum['enabled']:
-                                    self.logger.info("{} reference found, already disabled: {}".format(xmount, refdatum['key']))
-                                else:
-                                    self.logger.info("{} reference found, disabling failed: {}".format(xmount, refdatum['key']))
-                        elif self.verbose:
-                            self.logger.info("{} no reference found".format(xmount))
-                        dynmountdata.addDynmount(xmount, False, "", refs, refsena, poolHealth[uuid])
+                        # leave references as they are
+                        dynmountdata.addDynmount(xmount, health = poolHealth[uuid])
                 else:
                     if self.verbose:
                         self.logger.warning("{}: ZFS mount device is not a ZFS device".format(xmount))
@@ -277,13 +234,35 @@ class dynmount(mountfs, dynmountdata):
 
     ################## INTERNAL FUNCTIONS ###################
 
+    def getList(self):
+        newxmounts = []
+        mounts = self.engine.checkGroup(groups.MOUNTS)
+        if mounts:
+            for key, mount in mounts.items():
+                if mount['method'] == "dynmount":
+                    refs, refsena = self.getReferences(self.engine, key)
+                    mounted = self.isMounted(mount['mountpoint'])
+                    dynmountdata.addDynmount(key, mounted, mount['mountpoint'], refs, refsena)
+                    newxmounts.append(key)
+                elif mount['method'] == "auto":
+                    refs, refsena = self.getReferences(self.engine, key)
+                    dynmountdata.addDynmount(key, False, mount['mountpoint'], refs, refsena, health = "AUTO")
+                    newxmounts.append(key)
+        for newxmount in newxmounts:
+            if not newxmount in self.xmounts:
+                self.xmounts.append(newxmount)
+        for xmount in self.xmounts:
+            if not xmount in newxmounts:
+                self.xmounts.remove(xmount)
+                dynmountdata.delDynmount(xmount)
+
     def getZfsList(self):
         zfsList = []
 
         mounts = self.engine.checkGroup(groups.MOUNTS)
         if mounts:
             for key, mount in mounts.items():
-                if mount['dyn'] and mount['zfs']:
+                if mount['method'] == "dynmount" and mount['zfs']:
                     zfsList.append(mount['uuid'])
         return zfsList
 
@@ -293,12 +272,26 @@ class dynmount(mountfs, dynmountdata):
         mounts = self.engine.checkGroup(groups.MOUNTS)
         if mounts:
             for key, mount in mounts.items():
-                if mount['dyn']:
+                if mount['method'] == "dynmount":
                     if mount['uuid'] == uuid:
                         xmount = key
                         zfs = mount['zfs']
                         break
         return xmount, zfs
+
+    def getMountPoint(self, xmount):
+        mountpoint = ""
+        mount = self.engine.checkKey(groups.MOUNTS, xmount)
+        if mount:
+            mountpoint = mount['mountpoint']
+        return mountpoint
+
+    def getMethod(self, xmount):
+        method = "dynmount"
+        mount = self.engine.checkKey(groups.MOUNTS, xmount)
+        if mount:
+            method = mount['method']
+        return method
 
 ######################### MAIN ##########################
 if __name__ == "__main__":

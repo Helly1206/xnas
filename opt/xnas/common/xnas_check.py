@@ -34,12 +34,12 @@ from remotes.ping import ping
 # Class : xnas_check                                    #
 #########################################################
 class xnas_check(object):
-    def __init__(self, engine, Mount = None, Remotemount = None, Share = None, Net = None, noMsg = False, lightCheck = False, json = False):
+    def __init__(self, engine, Mount = None, Remotemount = None, Share = None, Net = None, noMsg = False, level = -1, json = False):
         #self.engine = engine
         self.logger = logging.getLogger('xnas.check')
         self.engine = engine
         self.noMsg = noMsg
-        self.lightCheck = lightCheck
+        self.level = level
         self.json = json
         self.msgLst = []
         self.msgCnt = 0
@@ -129,10 +129,6 @@ class xnas_check(object):
 
     def checkMounts(self):
         Errors = []
-        # Are all devices available?
-        # Are all auto mounts mounted? (Health!!!)
-        # Are all referenced mounts mounted?
-
         mounts = self.engine.checkGroup(groups.MOUNTS)
         if mounts:
             for key, mount in mounts.items():
@@ -146,22 +142,14 @@ class xnas_check(object):
                 else:
                     available = False
                 if not available:
-                    if not mount['dyn']:
+                    if mount['method'] == "startup" and self.level < 1:
                         self.printError(objects.MOUNT, key, errors.UNAVAILABLE)
-                        Errors.append(self.makeError(objects.MOUNT, key, errors.UNAVAILABLE, self.lightCheck))
+                        Errors.append(self.makeError(objects.MOUNT, key, errors.UNAVAILABLE, self.level2warningRpt(self.level)))
                 else:
-                    if mount['zfs']:
-                        entry = zfs.getEntry(self.Mount, mount['uuid'])
-                    else:
-                        entry = fstab.getEntry(self.Mount, mount['uuid'])
-                    auto = False
-                    if entry:
-                        if not 'noauto' in entry['options']:
-                            auto = True
-                    if auto and not mount['dyn']:
+                    if mount['method'] == "dynmount":
                         if not device[0]['mounted']:
-                            self.printError(objects.MOUNT, key, errors.AUTONOTMOUNTED)
-                            Errors.append(self.makeError(objects.MOUNT, key, errors.AUTONOTMOUNTED, self.lightCheck))
+                            self.printError(objects.MOUNT, key, errors.DYNNOTMOUNTED)
+                            Errors.append(self.makeError(objects.MOUNT, key, errors.DYNNOTMOUNTED, self.level2warning(self.level)))
                     if device[0]['mounted']:
                         if mount['zfs']:
                             health = zfs.getHealth(self.Mount, mount['uuid'], device[0]['mounted'])
@@ -169,11 +157,11 @@ class xnas_check(object):
                             health = fstab.getHealth(self.Mount, mount['uuid'], device[0]['fsname'], device[0]['label'], device[0]['mounted'])
                         if health != "ONLINE":
                             self.printError(objects.MOUNT, key, errors.UNHEALTHY, health)
-                            Errors.append(self.makeError(objects.MOUNT, key, errors.UNHEALTHY, self.lightCheck))
+                            Errors.append(self.makeError(objects.MOUNT, key, errors.UNHEALTHY, self.level2warning(self.level)))
                     else:
-                        if self.Mount.isReferenced(key, True):
+                        if self.Mount.isReferenced(key, True) and mount['method'] == "startup" and self.level >= 0:
                             self.printError(objects.MOUNT, key, errors.REFNOTMOUNTED)
-                            Errors.append(self.makeError(objects.MOUNT, key, errors.REFNOTMOUNTED, self.lightCheck))
+                            Errors.append(self.makeError(objects.MOUNT, key, errors.REFNOTMOUNTED, self.level2warning(self.level)))
 
         return Errors
 
@@ -185,14 +173,11 @@ class xnas_check(object):
             for key, mount in remotemounts.items():
                 url = self.Remotemount.buildDbURL(mount)
                 entry = self.Remotemount.getEntry(fsname=url)
-                auto = False
                 netdev = False
                 mounted = False
                 Guest = False
                 Creds = False
                 if entry:
-                    if not 'noauto' in entry['options']:
-                        auto = True
                     if '_netdev' in entry['options']:
                         netdev = True
                     if 'guest' in entry['options']:
@@ -201,86 +186,85 @@ class xnas_check(object):
                         if 'credentials' in opt:
                             Creds = True
                             break
-                    mounted = self.Remotemount.mounted(entry['mountpoint'])
+                    mounted = self.Remotemount.isMounted(entry['mountpoint'])
 
-                    if auto and not self.lightCheck and not mount['dyn']:
+                    if mount['method'] == "dynmount" and level >= 0:
                         if not mounted:
                             if ping().ping(url):
-                                self.printError(objects.REMOTEMOUNT, key, errors.AUTONOTMOUNTED)
-                                Errors.append(self.makeError(objects.REMOTEMOUNT, key, errors.AUTONOTMOUNTED))
+                                self.printError(objects.REMOTEMOUNT, key, errors.DYNNOTMOUNTED)
+                                Errors.append(self.makeError(objects.REMOTEMOUNT, key, errors.DYNNOTMOUNTED, self.level2warning(self.level)))
                             else:
                                 self.printError(objects.REMOTEMOUNT, key, errors.HOSTFAILED)
-                                Errors.append(self.makeError(objects.REMOTEMOUNT, key, errors.HOSTFAILED))
+                                Errors.append(self.makeError(objects.REMOTEMOUNT, key, errors.HOSTFAILED, self.level2warningRpt(self.level)))
 
                     if not netdev:
                         self.printError(objects.REMOTEMOUNT, key, errors.NONETDEV)
-                        Errors.append(self.makeError(objects.REMOTEMOUNT, key, errors.NONETDEV))
+                        Errors.append(self.makeError(objects.REMOTEMOUNT, key, errors.NONETDEV, self.level2warning(self.level)))
 
                     if mount['type'] == 'cifs' and self.engine.isSudo():
                         if not (Guest ^ Creds):
                             self.printError(objects.REMOTEMOUNT, key, errors.NOCREDENTIALS)
-                            Errors.append(self.makeError(objects.REMOTEMOUNT, key, errors.NOCREDENTIALS))
+                            Errors.append(self.makeError(objects.REMOTEMOUNT, key, errors.NOCREDENTIALS, self.level2warning(self.level)))
                     elif mount['type'] == 'davfs' and self.engine.isSudo():
                         Creds = davfs(self.logger).hasCredentials(url)
                         if not (Guest ^ Creds):
                             self.printError(objects.REMOTEMOUNT, key, errors.NOCREDENTIALS)
-                            Errors.append(self.makeError(objects.REMOTEMOUNT, key, errors.NOCREDENTIALS))
+                            Errors.append(self.makeError(objects.REMOTEMOUNT, key, errors.NOCREDENTIALS, self.level2warning(self.level)))
 
                     if mounted:
                         health = self.Remotemount.getHealth(fsname = entry['fsname'], isMounted = mounted, hasHost = ping().ping(url))
                         if health != "ONLINE":
                             self.printError(objects.REMOTEMOUNT, key, errors.UNHEALTHY, health)
-                            Errors.append(self.makeError(objects.REMOTEMOUNT, key, errors.UNHEALTHY, self.lightCheck))
+                            Errors.append(self.makeError(objects.REMOTEMOUNT, key, errors.UNHEALTHY, self.level2warning(self.level)))
                     else:
-                        if self.Remotemount.isReferenced(key, True) and not mount['dyn']:
+                        if self.Remotemount.isReferenced(key, True) and mount['method'] == "startup" and self.level >= 0:
                             if ping().ping(url):
                                 self.printError(objects.REMOTEMOUNT, key, errors.REFNOTMOUNTED)
-                                Errors.append(self.makeError(objects.REMOTEMOUNT, key, errors.REFNOTMOUNTED, self.lightCheck))
+                                Errors.append(self.makeError(objects.REMOTEMOUNT, key, errors.REFNOTMOUNTED, self.level2warning(self.level)))
                             else:
                                 self.printError(objects.REMOTEMOUNT, key, errors.HOSTFAILED)
-                                Errors.append(self.makeError(objects.REMOTEMOUNT, key, errors.HOSTFAILED, self.lightCheck))
-
+                                Errors.append(self.makeError(objects.REMOTEMOUNT, key, errors.HOSTFAILED, self.level2warningRpt(self.level)))
                 else: # No entry available
-                    if not mount['dyn']:
+                    if mount['method'] == "startup":
                         self.printError(objects.REMOTEMOUNT, key, errors.UNAVAILABLE)
-                        Errors.append(self.makeError(objects.REMOTEMOUNT, key, errors.UNAVAILABLE, self.lightCheck))
-
+                        Errors.append(self.makeError(objects.REMOTEMOUNT, key, errors.UNAVAILABLE, self.level2warningRpt(self.level)))
         return Errors
 
     def checkShares(self):
         Errors = []
-        # Are all sources available? errors.UNAVAILABLE
-        # Are all referenced shares bound? errors.REFNOTMOUNTED
-        # Are all shares bound? errors.NOTMOUNTED
-
         shares = self.engine.checkGroup(groups.SHARES)
         if shares:
             for key, share in shares.items():
-                if not self.Share.isSourced(key, True) and share['enabled']:
-                    self.printError(objects.SHARE, key, errors.UNAVAILABLE, share['xmount'])
-                    Errors.append(self.makeError(objects.SHARE, key, errors.UNAVAILABLE))
-                elif not self.Share.isBound(key, True):
+                if share['enabled']:
+                    if not self.Share.getlink(self.engine.shareDir(key)):
+                        self.printError(objects.SHARE, key, errors.ENABLEDNOTLINKED)
+                        Errors.append(self.makeError(objects.SHARE, key, errors.ENABLEDNOTLINKED, self.level2warning(self.level)))
+                else: #disabled
                     if self.Share.isReferenced(key, True):
-                        self.printError(objects.SHARE, key, errors.REFNOTMOUNTED)
-                        Errors.append(self.makeError(objects.SHARE, key, errors.REFNOTMOUNTED, self.lightCheck))
-                    elif share['enabled']:
-                        self.printError(objects.SHARE, key, errors.NOTMOUNTED)
-                        Errors.append(self.makeError(objects.SHARE, key, errors.NOTMOUNTED, self.lightCheck))
-
+                        self.printError(objects.SHARE, key, errors.DISABLEDREFERENCED)
+                        Errors.append(self.makeError(objects.SHARE, key, errors.DISABLEDREFERENCED, self.level2warning(self.level)))
+                    elif self.Share.getlink(self.engine.shareDir(key)):
+                        self.printError(objects.SHARE, key, errors.DISABLEDLINKED)
+                        Errors.append(self.makeError(objects.SHARE, key, errors.DISABLEDLINKED, self.level2warning(self.level)))
         return Errors
 
     def checkNets(self):
         Errors = []
-        # Are all sources available? errors.UNAVAILABLE
 
         netshares = self.engine.checkGroup(groups.NETSHARES)
         if netshares:
             for key, netshare in netshares.items():
                 if not self.Net.isSourced(key, True) and netshare['enabled']:
                     self.printError(objects.NETSHARE, key, errors.UNAVAILABLE, key)
-                    Errors.append(self.makeError(objects.NETSHARE, key, errors.UNAVAILABLE, self.lightCheck))
+                    Errors.append(self.makeError(objects.NETSHARE, key, errors.UNAVAILABLE, self.level2warning(self.level)))
 
         return Errors
+
+    def level2warningRpt(self, level):
+        return level != 0
+
+    def level2warning(self, level):
+        return level < 0
 
     def makeError(self, obj, name, check, warning = False):
         #{"obj": OBJECT, "name": NAME, "check": CHECK}
@@ -295,23 +279,23 @@ class xnas_check(object):
         if obj == objects.MOUNT:
             if check == errors.UNAVAILABLE:
                 self.logError("{}: [Mount] Device is unavailable".format(name))
-            elif check == errors.AUTONOTMOUNTED:
-                self.logError("{}: [Mount] Device is not mounted but should be automounted".format(name))
+            elif check == errors.DYNNOTMOUNTED:
+                self.logError("{}: [Mount] Device is not mounted but should be dynmounted".format(name))
             elif check == errors.UNHEALTHY:
                 self.logError("{}: [Mount] Device is mounted but not healthy: {}".format(name, text))
             elif check == errors.REFNOTMOUNTED:
-                self.logError("{}: [Mount] Device is referenced but not mounted".format(name))
+                self.logError("{}: [Mount] Device is referenced but not mounted and should be startup mounted".format(name))
         elif obj == objects.REMOTEMOUNT:
             if check == errors.UNAVAILABLE:
                 self.logError("{}: [Remotemount] Device is unavailable".format(name))
             elif check == errors.HOSTFAILED:
                 self.logError("{}: [Remotemount] Device host unreachable".format(name))
-            elif check == errors.AUTONOTMOUNTED:
-                self.logError("{}: [Remotemount] Device is not mounted but should be automounted".format(name))
+            elif check == errors.DYNNOTMOUNTED:
+                self.logError("{}: [Remotemount] Device is not mounted but should be dynmounted".format(name))
             elif check == errors.UNHEALTHY:
                 self.logError("{}: [Remotemount] Device is mounted but not healthy: {}".format(name, text))
             elif check == errors.REFNOTMOUNTED:
-                self.logError("{}: [Remotemount] Device is referenced but not mounted".format(name))
+                self.logError("{}: [Remotemount] Device is referenced but not mounted and should be startup mounted".format(name))
             elif check == errors.NONETDEV:
                 self.logError("{}: [Remotemount] Device doesn't have '_netdev' option".format(name))
             elif check == errors.NOCREDENTIALS:
@@ -319,10 +303,12 @@ class xnas_check(object):
         elif obj == objects.SHARE:
             if check == errors.UNAVAILABLE:
                 self.logError("{}: [Share] Source device '{}' is unavailable".format(name, text))
-            elif check == errors.REFNOTMOUNTED:
-                self.logError("{}: [Share] Device is referenced but not bound".format(name))
-            elif check == errors.NOTMOUNTED:
-                self.logError("{}: [Share] Device is not bound".format(name))
+            elif check == errors.ENABLEDNOTLINKED:
+                self.logError("{}: [Share] Device is enabled but not linked".format(name))
+            elif check == errors.DISABLEDLINKED:
+                self.logError("{}: [Share] Device is disabled but link exists".format(name))
+            elif check == errors.DISABLEDREFERENCED:
+                self.logError("{}: [Share] Device is disabled but referenced".format(name))
         elif obj == objects.NETSHARE:
             if check == errors.UNAVAILABLE:
                 self.logError("{}: [Netshare] Source device '{}' is unavailable".format(name, text))

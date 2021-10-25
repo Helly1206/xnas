@@ -19,7 +19,7 @@ import re
 #########################################################
 
 ####################### GLOBALS #########################
-VERSION = "0.9.0"
+VERSION = "1.0.0"
 LOG_FILENAME     = "xnas.log"
 LOG_MAXSIZE      = 100*1024*1024
 HELPSTANDARD     = {"help": "this help file",
@@ -36,13 +36,16 @@ SHARESFOLDER     = "/shares"
 class errors:
     OK                   = 0
     UNAVAILABLE          = 1
-    AUTONOTMOUNTED       = 2
+    DYNNOTMOUNTED        = 2
     UNHEALTHY            = 3
     REFNOTMOUNTED        = 4
     NOTMOUNTED           = 5
     HOSTFAILED           = 6
     NONETDEV             = 7
     NOCREDENTIALS        = 8
+    ENABLEDNOTLINKED     = 9
+    DISABLEDLINKED       = 10
+    DISABLEDREFERENCED   = 11
 
 class objects:
     NONE                 = 0
@@ -243,6 +246,9 @@ Version: {}""".format(ansi.bold, ansi.fg.blue, ansi.reset, ansi.italic, ansi.res
         r['result'] = result
         print(json.dumps(r))
 
+    def printUnmarked(self, data):
+        print("{}".format(data))
+
     def printMarked(self, data, underline = False):
         if underline:
             print("{}{}{}{}".format(ansi.underline, ansi.bold, data, ansi.reset))
@@ -424,6 +430,21 @@ Version: {}""".format(ansi.bold, ansi.fg.blue, ansi.reset, ansi.italic, ansi.res
         else:
             retval = os.path.join(SHARESFOLDER, dir)
         return retval
+
+    def checkMethod(self, method):
+        return method in ["disabled", "startup", "auto", "dynmount"]
+
+    def tryInt(self, var):
+        val = 0
+        if not isinstance(var, int):
+            try:
+                val = int(var)
+            except:
+                pass
+        else:
+            val = var
+        return val
+
 
     ################## INTERNAL FUNCTIONS ###################
     def lentxt(self, txt):

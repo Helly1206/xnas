@@ -112,10 +112,10 @@ class remotemount(fstab, mountfs, mountpoint):
                         mymount['size'] = None
                         mymount['used'] = None
                         mymount['mounted'] = False
-                    mymount['enabled'] = fstab.isEna(self, fsname = entry['fsname'])
+                    #mymount['enabled'] = mount['enabled'] #fstab.isEna(self, fsname = entry['fsname'])
                     mymount['health'] = self.getHealth(fsname = entry['fsname'], isMounted = mymount['mounted'], hasHost = ping().ping(url))
                     mymount['referenced'] = self.isReferenced(key, True)
-                    mymount['dynmount'] = mount['dyn']
+                    mymount['method'] = mount['method']
                 if mymount:
                     mymounts.append(mymount)
 
@@ -137,6 +137,14 @@ class remotemount(fstab, mountfs, mountpoint):
                                 if arg['server'] == server and arg['sharename'] == sharename:
                                     popArg = arg
                                     break
+                            elif 'server' in arg and not 'sharename' in arg:
+                                iserver = server
+                                if sharename:
+                                    iserver = "{}.{}".format(server, sharename)
+                                if arg['server'] == iserver:
+                                    popArg = arg
+                                    break
+
                     newMount = self.addToDB(entry, interactive, popArg)
                     if newMount:
                         addedMounts.append(newMount)
@@ -178,7 +186,7 @@ class remotemount(fstab, mountfs, mountpoint):
                     mp = mpoint
                 else:
                     mp = entry['mountpoint']
-                isMounted = self.mounted(mp)
+                isMounted = self.isMounted(mp)
                 if not isMounted:
                     if ping().ping(entry['fsname']):
                         retval = mountfs.mount(self, mp)
@@ -217,10 +225,9 @@ class remotemount(fstab, mountfs, mountpoint):
                     mp = mpoint
                 else:
                     mp = entry['mountpoint']
-                isMounted = self.mounted(mp)
+                isMounted = self.isMounted(mp)
                 if isMounted:
-                    if not self.isReferenced(name):
-                        retval = mountfs.unmount(self, mp, internal = True)
+                    retval = mountfs.unmount(self, mp, internal = True)
                 elif dbItem:
                     self.logger.warning("{} is not mounted".format(name))
         if retval:
@@ -248,15 +255,22 @@ class remotemount(fstab, mountfs, mountpoint):
         if retval:
             self.logger.info("{} removed from database".format(name))
         else:
-            self.logger.warning("{} removed from database".format(name))
+            self.logger.warning("{} not removed from database".format(name))
         return retval
 
+    """
     def ena(self, name):
         retval = False
         db = self.engine.checkKey(groups.REMOTEMOUNTS, name)
         if db:
-            retval = fstab.ena(self, fsname=self.buildDbURL(db))
+            if db['method'] == "auto":
+                retval = fstab.ena(self, fsname=self.buildDbURL(db))
+            elif fstab.isEna(self, fsname=self.buildDbURL(db)):
+                retval = fstab.dis(self, fsname=self.buildDbURL(db))
+            else:
+                retval = True
         if retval:
+            db['enabled'] = True
             self.logger.info("{} enabled".format(name))
         else:
             self.logger.warning("{} not enabled".format(name))
@@ -267,12 +281,17 @@ class remotemount(fstab, mountfs, mountpoint):
         db = self.engine.checkKey(groups.REMOTEMOUNTS, name)
         if db:
             if not self.isReferenced(name):
-                retval = fstab.dis(self, fsname=self.buildDbURL(db))
+                if fstab.isEna(self, fsname=self.buildDbURL(db)):
+                    retval = fstab.dis(self, fsname=self.buildDbURL(db))
+                else:
+                    retval = True
         if retval:
+            db['enabled'] = False
             self.logger.info("{} disabled".format(name))
         else:
             self.logger.warning("{} not disabled".format(name))
         return retval
+    """
 
     def shw(self, name):
         remotemountData = {}
@@ -284,10 +303,10 @@ class remotemount(fstab, mountfs, mountpoint):
                 remotemountData['https'] = db['https']
                 remotemountData['server'] = db['server']
                 remotemountData['sharename'] = db['sharename']
-                remotemountData['mountpoint'] = entry['mountpoint']
+                remotemountData['mountpoint'] = db['mountpoint']
                 remotemountData['type'] = entry['type']
                 remotemountData['options'] = fstab.getExtraOptions(self, entry['options'])
-                remotemountData['auto'] = not 'noauto' in entry['options']
+                #remotemountData['auto'] = not 'noauto' in entry['options']
                 remotemountData['rw'] = not 'ro' in entry['options']
                 remotemountData['freq'] = entry['dump']
                 remotemountData['pass'] = entry['pass']
@@ -301,61 +320,47 @@ class remotemount(fstab, mountfs, mountpoint):
                 mode = self.getMode(remotemountData['mountpoint'])
                 remotemountData['uacc'] = self.getUacc(mode)
                 remotemountData['sacc'] = self.getSacc(mode)
-                remotemountData['dynmount'] = db['dyn']
+                remotemountData['method'] = db['method']
+                remotemountData['idletimeout'] = 0
+                remotemountData['timeout'] = 0
+                hasito, itoval = fstab.getopt(self, entry['options'], "x-systemd.idle-timeout")
+                hasto, toval = fstab.getopt(self, entry['options'], "x-systemd.mount-timeout")
+                if hasto:
+                    remotemountData['timeout'] = self.engine.tryInt(toval)
+                if db['method'] == "auto" and hasito:
+                    remotemountData['idletimeout'] = self.engine.tryInt(itoval)
         return remotemountData
 
     def addRm(self, name):
         retval = True
-        entry = {}
-        entryNew = {}
-        newEntry = False
-        uuid = ""
         db, entry = self.findEntry(self.engine.settings, generate = False)
+        typeObj = None
+        newEntry = False
+        entryNew = {}
+        uuid = ""
         changed = False
         currentMountpoint = ""
         currentLabel = ""
         deleteCurrentMountpoint = False
-        typeObj = None
-        # Check existence of entry
-        if db: # in db
-            if self.isReferenced(name):
-                self.logger.info("{} found in database, but is referenced. Remove reference first".format(name))
-                retval = False
-            else:
-                self.logger.info("{} found in database, editing content".format(name))
-                typeObj = self.loadTypeObj(db['type'])
-                if self.hasTypeObj(typeObj):
-                    entry = self.getEntry(fsname=self.buildDbURL(db, typeObj))
-                else:
-                    self.logger.error("{} found in database, but invalid type".format(name))
-                    retval = False
-        elif entry:
-            self.logger.info("{} not in database, but entry found, editing content".format(name))
-            typeObj = self.loadTypeObj(entry['type'])
-            if self.hasTypeObj(typeObj):
-                # check entry is somewhere else is DB or create new entry
-                dbkey = self.findEntryInDb(entry, typeObj)
-                if dbkey:
-                    self.logger.warning("{} found in database under different mount: {}".format(name, dbkey))
-                    retval = False
-                if retval:
-                    newEntry = False
-            else:
-                self.logger.error("{} found, but invalid type".format(name))
-                retval = False
-        else:
-            if retval:
-                if 'server' in self.engine.settings and 'sharename' in self.engine.settings and 'type' in self.engine.settings:
-                    typeObj = self.loadTypeObj(self.engine.settings['type'])
-                    if self.hasTypeObj(typeObj):
-                        self.logger.info("{} not found, creating new item".format(name))
-                        newEntry = True
-                    else:
-                        self.logger.error("{} not found, and invalid type entered".format(name))
-                        retval = False
-                else:
-                    self.logger.warning("{} not found, no server, sharename and/ or type entered".format(name))
-                    retval = False
+        guest = False
+        sacc = "rw"
+        uacc = "rw"
+        mode = 0o777
+        curmode = 0o777
+        method = "disabled" #should never occur as settings["method"] is always set
+
+        if 'type' in self.engine.settings:
+            retval = self.checkType(self.engine.settings['type'])
+            if not retval:
+                self.logger.error("Invalid type entered: {}".format(self.engine.settings['type']))
+        if retval and 'method' in self.engine.settings:
+            retval = self.engine.checkMethod(self.engine.settings['method'])
+            if not retval:
+                self.logger.error("Invalid method entered: {}".format(self.engine.settings['method']))
+
+        if retval:
+            retval, typeObj, newEntry = self.checkDbEntryExistence(db, entry, name)
+
         # Make Mountpoint
         if retval:
             MPvalid = True
@@ -436,25 +441,30 @@ class remotemount(fstab, mountfs, mountpoint):
             else:
                 guest = False
 
+        #check mode and other settings
         if retval:
-            oldOptions = deepcopy(entryNew['options'])
-            curmode = self.setMode("rw", "rw") # RW mode if new or non existent
-            if currentMountpoint:
-                curmode = self.getMode(currentMountpoint)
-            elif mountpoint.exists(self, entryNew['mountpoint']):
-                curmode = self.getMode(entryNew['mountpoint'])
+            if not mountpoint.exists(self, entryNew['mountpoint']):
+                retval = mountpoint.create(self, entryNew['mountpoint'])
+                if retval:
+                    self.logger.info("Created new mountpoint: {}".format(entryNew['mountpoint']))
+        if retval:
+            curmode = self.getMode(entryNew['mountpoint'])
             if 'uacc' in self.engine.settings:
                 uacc = self.engine.settings['uacc']
+            elif newEntry:
+                uacc = "rw"
             else:
                 uacc = self.getUacc(curmode)
             if 'sacc' in self.engine.settings:
                 sacc = self.engine.settings['sacc']
+            elif newEntry:
+                sacc = "rw"
             else:
                 sacc = self.getSacc(curmode)
-            typeObj.setOptions(entryNew['options'], entryNew['fsname'], guest, self.strMode(self.setMode(uacc, sacc)))
-            changed = changed or (oldOptions != entryNew['options'])
+            mode = self.setMode(uacc, sacc)
+            changed = changed or typeObj.setOptions(entryNew['options'], entryNew['fsname'], guest, self.strMode(mode))
 
-        # If changed, unmount and update
+        # If changed, unmount
         if changed and retval:
             if currentMountpoint:
                 # If entry['mountpoint'] exists, then entry['fsname'] must also exist
@@ -462,49 +472,32 @@ class remotemount(fstab, mountfs, mountpoint):
             if not retval:
                 self.logger.warning("Unable to unmount {}".format(name))
 
+        #delete old mountpoint if required
         if retval:
-            retval = self.updateEntry(entryNew, newEntry)
-
-        # Mount if not noauto option
-        if retval:
-            if 'dynmount' in self.engine.settings:
-                dyn = self.engine.settings['dynmount']
-            else:
-                dyn = False
             if deleteCurrentMountpoint:
                 retval = mountpoint.delete(self, currentMountpoint)
                 if retval:
                     self.logger.info("Removed old mountpoint: {}".format(currentMountpoint))
-            if retval and not mountpoint.exists(self, entryNew['mountpoint']):
-                retval = mountpoint.create(self, entryNew['mountpoint'])
-                if retval:
-                    self.logger.info("Created new mountpoint: {}".format(entryNew['mountpoint']))
-            if retval:
-                curmode = self.getMode(entryNew['mountpoint'])
-                if 'uacc' in self.engine.settings:
-                    uacc = self.engine.settings['uacc']
-                elif newEntry:
-                    uacc = "rw"
-                else:
-                    uacc = self.getUacc(curmode)
-                if 'sacc' in self.engine.settings:
-                    sacc = self.engine.settings['sacc']
-                elif newEntry:
-                    sacc = "rw"
-                else:
-                    sacc = self.getSacc(curmode)
-                mode = self.setMode(uacc, sacc)
-                if mode != curmode:
-                    self.chMode(entryNew['mountpoint'], mode)
-                    self.logger.info("Changed mountpoint mode: user {}, superuser {}".format(uacc, sacc))
-            if retval:
-                noauto = False
-                if 'options' in entryNew:
-                    noauto = 'noauto' in entryNew['options']
-                    if not noauto:
-                        retval = self.mnt(entryNew['fsname'], dbItem = False, mpoint = entryNew['mountpoint'])
-                        if dyn: # Do not blame mounting failed if dynmount device
-                            retval = True
+
+        #change mode
+        if retval:
+            if mode != curmode:
+                self.chMode(entryNew['mountpoint'], mode)
+                self.logger.info("Changed mountpoint mode: user {}, superuser {}".format(uacc, sacc))
+
+        #update entry
+        if retval:
+            retval = self.updateEntry(entryNew, newEntry)
+
+        # Mount if startup method or dynmount
+        if retval:
+            if 'method' in self.engine.settings:
+                method = self.engine.settings['method']
+            if (method == "startup") or (method == "dynmount"):
+                retval = self.mnt(entryNew['fsname'], dbItem = False, mpoint = entryNew['mountpoint'])
+
+        if retval and changed:
+            retval = fstab.systemdReload(self, remote = True)
 
         # Add to DB or edit DB
         if retval:
@@ -517,7 +510,8 @@ class remotemount(fstab, mountfs, mountpoint):
             dbMountItems = {}
             dbMountItems['https'], dbMountItems['server'], dbMountItems['sharename'] = self.parseEntryURL(entryNew, typeObj)
             dbMountItems['type'] = entryNew['type']
-            dbMountItems['dyn'] = dyn
+            dbMountItems['mountpoint'] = entryNew['mountpoint']
+            dbMountItems['method'] = method
             dbMount[name] = dbMountItems
             self.engine.addToGroup(groups.REMOTEMOUNTS, dbMount)
             self.logger.info("{} added/ edited".format(name))
@@ -580,6 +574,14 @@ class remotemount(fstab, mountfs, mountpoint):
 
         return url
 
+    def getMntEntry(self, name):
+        entry = {}
+        db = self.engine.checkKey(groups.REMOTEMOUNTS, name)
+        if db:
+            url = self.buildDbURL(db)
+            entry = self.getEntry(fsname=url)
+        return entry
+
     ################## INTERNAL FUNCTIONS ###################
 
     def addToDB(self, entry, interactive = False, popArg = {}):
@@ -616,7 +618,7 @@ class remotemount(fstab, mountfs, mountpoint):
 
             print("New remotemount found:")
             if entry['type'] == "davfs":
-                    print("    https         : ", https)
+                print("    https         : ", https)
             print("    server        : ", server)
             print("    sharename     : ", sharename)
             print("    mountpoint    : ", entry['mountpoint'])
@@ -665,10 +667,11 @@ class remotemount(fstab, mountfs, mountpoint):
             dbMountItems['server'] = server
             dbMountItems['sharename'] = sharename
             dbMountItems['type'] = entry['type']
-            if 'dynmount' in self.engine.settings:
-                dbMountItems['dyn'] = self.engine.settings['dynmount']
+            dbMountItems['mountpoint'] = entry['mountpoint']
+            if not "noauto" in entry["options"]:
+                dbMountItems['method'] = "startup"
             else:
-                dbMountItems['dyn'] = False
+                dbMountItems['method'] = "auto"
             dbMount[name] = dbMountItems
             self.engine.addToGroup(groups.REMOTEMOUNTS, dbMount)
             newMount['xremotemount'] = name
@@ -677,7 +680,7 @@ class remotemount(fstab, mountfs, mountpoint):
             newMount['sharename'] = sharename
             newMount['mountpoint'] = entry['mountpoint']
             newMount['type'] = entry['type']
-            newMount['dynmount'] = dbMountItems['dyn']
+            newMount['method'] = dbMountItems['method']
             self.logger.info("New mount entry: {}".format(name))
 
         self.delTypeObj(typeObj)
@@ -717,16 +720,17 @@ class remotemount(fstab, mountfs, mountpoint):
         else:
             cmd = "df --output=source,size,used,target {}".format(mpoint)
         try:
-            lines = shell().command(cmd).splitlines()
-            if len(lines) > 1:
-                for line in lines[1:]:
-                    data = line.split()
-                    if len(data) == 4:
-                        if data[3] == mpoint: # df can give strange output if device not mounted
-                            entry['label'] = data[0]
-                            entry['size'] = data[1].replace(",",".")
-                            entry['used'] = data[2].replace(",",".")
-                            break
+            if self.isMounted(mpoint): #don't trigger df when not mounted as it mounts automounts
+                lines = shell().command(cmd).splitlines()
+                if len(lines) > 1:
+                    for line in lines[1:]:
+                        data = line.split()
+                        if len(data) == 4:
+                            if data[3] == mpoint: # df can give strange output if device not mounted
+                                entry['label'] = data[0]
+                                entry['size'] = data[1].replace(",",".")
+                                entry['used'] = data[2].replace(",",".")
+                                break
         except:
             pass
         return entry
@@ -822,9 +826,14 @@ class remotemount(fstab, mountfs, mountpoint):
         items = self.engine.findAllInGroup(groups.REMOTEMOUNTS, 'type', type)
         for ikey, ivalue in items.items():
             httpsok = True
+            iserver = server
+            isharename = sharename
             if type == 'davfs':
                 httpsok = ivalue['https'] == https
-            if httpsok and ivalue['server'] == server and ivalue['sharename'] == sharename:
+                if not ivalue['sharename'] and isharename:
+                    iserver = "{}.{}".format(server, sharename)
+                    isharename = ""
+            if httpsok and ivalue['server'] == iserver and ivalue['sharename'] == isharename:
                 dbkey = ikey
                 break
         return dbkey
@@ -848,6 +857,93 @@ class remotemount(fstab, mountfs, mountpoint):
 
         return https, server, sharename
 
+    def checkType(self, type):
+        return type in FSTYPES
+
+    def checkDbEntryExistence(self, db, entry, name):
+        retval = True
+        typeObj = None
+        newEntry = False
+
+        # Check existence of entry
+        if db: # in db
+            self.logger.info("{} found in database, editing content".format(name))
+            typeObj = self.loadTypeObj(db['type'])
+            if not self.hasTypeObj(typeObj):
+                self.logger.error("{} found in database, but invalid type".format(name))
+                retval = False
+            elif not entry:
+                self.logger.error("{} found in database, but no entry found".format(name))
+                retval = False
+            elif not 'method' in self.engine.settings:
+                self.engine.settingsStr(self.engine.settings, 'method', True, db['method'])
+        elif entry:
+            self.logger.info("{} not in database, but entry found, editing content".format(name))
+            typeObj = self.loadTypeObj(entry['type'])
+            if self.hasTypeObj(typeObj):
+                # check entry is somewhere else is DB or create new entry
+                dbkey = self.findEntryInDb(entry, typeObj)
+                if dbkey:
+                    self.logger.warning("{} found in database under different mount: {}".format(name, dbkey))
+                    retval = False
+                if retval:
+                    newEntry = False
+                    if not 'method' in self.engine.settings:
+                        if not "noauto" in entry["options"]:
+                            self.engine.settingsStr(self.engine.settings, 'method', True, 'startup')
+                        elif "x-systemd.automount" in entry["options"]:
+                            self.engine.settingsStr(self.engine.settings, 'method', True, 'auto')
+                        else:
+                            self.engine.settingsStr(self.engine.settings, 'method', True, 'disabled')
+            else:
+                self.logger.error("{} found, but invalid type".format(name))
+                retval = False
+        else:
+            if retval:
+                if 'server' in self.engine.settings and 'type' in self.engine.settings:
+                    if not 'sharename' in self.engine.settings:
+                        if self.engine.settings['type'] == "davfs":
+                            self.engine.settingsStr(self.engine.settings, 'sharename')
+                        else:
+                            self.logger.warning("{} not found, no sharename entered".format(name))
+                            retval = False
+                    typeObj = self.loadTypeObj(self.engine.settings['type'])
+                    if self.hasTypeObj(typeObj):
+                        self.logger.info("{} not found, creating new item".format(name))
+                        newEntry = True
+                        if not 'method' in self.engine.settings:
+                            self.engine.settingsStr(self.engine.settings, 'method', True, 'auto')
+                    else:
+                        self.logger.error("{} not found, and invalid type entered".format(name))
+                        retval = False
+                else:
+                    self.logger.warning("{} not found, no server, sharename and/ or type entered".format(name))
+                    retval = False
+
+        if retval:
+            if 'idletimeout' in self.engine.settings:
+                self.engine.settings['idletimeout'] = self.engine.tryInt(self.engine.settings['idletimeout'])
+            else:
+                hasito, itoval = fstab.getopt(self, entry['options'], "x-systemd.idle-timeout")
+                if hasito:
+                    self.engine.settings['idletimeout'] = self.engine.tryInt(itoval)
+                elif 'method' in self.engine.settings:
+                    if self.engine.settings['method'] == "auto":
+                        self.engine.settings['idletimeout'] = 30
+                    else:
+                        self.engine.settings['idletimeout'] = 0
+                else:
+                    self.engine.settings['idletimeout'] = 0
+            if 'timeout' in self.engine.settings:
+                self.engine.settings['timeout'] = self.engine.tryInt(self.engine.settings['timeout'])
+            else:
+                hasto, toval = fstab.getopt(self, entry['options'], "x-systemd.mount-timeout")
+                if hasto:
+                    self.engine.settings['timeout'] = self.engine.tryInt(toval)
+                else:
+                    self.engine.settings['timeout'] = 10
+
+        return retval, typeObj, newEntry
 ######################### MAIN ##########################
 if __name__ == "__main__":
     pass

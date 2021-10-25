@@ -11,6 +11,7 @@ import os
 import shutil
 from common.ls import ls
 from common.shell import shell
+from common.systemdctl import systemdctl
 #########################################################
 
 ####################### GLOBALS #########################
@@ -153,7 +154,7 @@ class fstab(object):
         else:
             changed = True
             options = []
-        
+
         device = {}
         if not self.remote:
             if "fsname" in settings and settings["fsname"]:
@@ -172,12 +173,12 @@ class fstab(object):
                     changed = changed or entry['fsname'] != device['fsname']
                     entry['fsname'] = device['fsname']
             else:
-                entry["fsname"] = ""  
+                entry["fsname"] = ""
         elif fsname: # remote
                 changed = True
                 entry['fsname'] = fsname
         else:
-            entry["fsname"] = "" 
+            entry["fsname"] = ""
         if "uuid" in entry:
             if entry["uuid"]:
                 if device:
@@ -186,7 +187,7 @@ class fstab(object):
             else:
                 entry["uuid"] = ""
         else:
-            entry["uuid"] = "" 
+            entry["uuid"] = ""
         if "label" in entry:
             if entry["label"]:
                 if device:
@@ -197,9 +198,12 @@ class fstab(object):
         else:
             entry["label"] = ""
         if not entry["fsname"] and not entry["uuid"] and not entry["label"]: #new device
-            entry["uuid"] = device["uuid"]
-            changed = True 
-                    
+            if device:
+                entry["uuid"] = device["uuid"]
+            else:
+                entry["uuid"] = ""
+            changed = True
+
         if "mountpoint" in settings:
             if "mountpoint" in entry:
                 echanged =  entry['mountpoint'] != settings['mountpoint']
@@ -225,7 +229,9 @@ class fstab(object):
             else:
                 entry['type'] = "none"
         if "options" in settings:
-            doptions = list(map(str.strip, settings['options'].split(","))).remove("");
+            doptions = list(map(str.strip, settings['options'].split(",")))
+            while "" in doptions:
+                doptions.remove("")
             if not doptions:
                 doptions = []
             soptions = self.getExtraOptions(doptions)
@@ -244,14 +250,53 @@ class fstab(object):
         elif not ("options" in entry or len(entry["options"]) == 0) and not self.remote:
             changed = True
             options.append("defaults")
-        if "auto" in settings:
-            if settings['auto']:
+        automount = False
+        if "method" in settings:
+            if settings['method'] == "startup":
                 if "noauto" in options:
                     changed = True
                     options.remove("noauto")
             elif not "noauto" in options:
+                changed = True
+                options.append("noauto")
+            if settings['method'] == "auto":
+                automount = True
+                if not "x-systemd.automount" in options:
                     changed = True
-                    options.append("noauto")
+                    options.append("x-systemd.automount")
+            elif "x-systemd.automount" in options:
+                changed = True
+                options.remove("x-systemd.automount")
+        if automount:
+            if "idletimeout" in settings:
+                hasopt, value = self.getopt(options, "x-systemd.idle-timeout")
+                if not hasopt and settings["idletimeout"] > 0:
+                    changed = True
+                    self.setopt(options, "x-systemd.idle-timeout", settings["idletimeout"])
+                elif hasopt and (int(value) != settings["idletimeout"]):
+                    changed = True
+                    self.removeopt(options, "x-systemd.idle-timeout")
+                    if settings["idletimeout"] > 0:
+                        self.setopt(options, "x-systemd.idle-timeout", settings["idletimeout"])
+            else:
+                if self.removeopt(options, "x-systemd.idle-timeout"):
+                    changed = True
+        else:
+            if self.removeopt(options, "x-systemd.idle-timeout"):
+                changed = True
+        if "timeout" in settings:
+            hasopt, value = self.getopt(options, "x-systemd.mount-timeout")
+            if not hasopt and settings["timeout"] > 0:
+                changed = True
+                self.setopt(options, "x-systemd.mount-timeout", settings["timeout"])
+            elif hasopt and (int(value) != settings["timeout"]):
+                changed = True
+                self.removeopt(options, "x-systemd.mount-timeout")
+                if settings["timeout"] > 0:
+                    self.setopt(options, "x-systemd.mount-timeout", settings["timeout"])
+        else:
+            if self.removeopt(options, "x-systemd.mount-timeout"):
+                changed = True
         if "rw" in settings:
             if settings['rw']:
                 if "ro" in options:
@@ -299,7 +344,7 @@ class fstab(object):
         retval = True
         if not self.remote:
             self.loadDevices()
-            
+
             if entry["uuid"]:
                 if not new:
                     if self.findEntryLine(uuid = entry["uuid"]) < 0:
@@ -343,6 +388,20 @@ class fstab(object):
 
         return retval
 
+    def setUmaskOption(self, options, umask = None):
+        changed = False
+        if umask != None:
+            hasopt, value = self.getopt(options, "umask")
+            if not hasopt and umask != "0022":
+                changed = True
+                self.setopt(options, "umask", umask)
+            elif hasopt and (value != umask):
+                changed = True
+                self.removeopt(options, "umask")
+                if umask != "0022":
+                    self.setopt(options, "umask", mask)
+        return changed
+
     def restoreFstab(self, backupnr):
         retval = False
         if 0 < backupnr <= FSTABBACKUPS:
@@ -361,7 +420,7 @@ class fstab(object):
                 try:
                     outp = shell().command(cmd, 1)
                 except:
-                            outp = []
+                    outp = []
                 if outp:
                     diff = outp.splitlines()
                 else:
@@ -381,18 +440,33 @@ class fstab(object):
         return lst
 
     def getExtraOptions(self, options, default = False):
-        defOpt = ["auto","noauto","rw","ro","atime","noatime","diratime","nodiratime","_netdev"]
+        defOpt = ["auto","noauto","rw","ro","atime","noatime","diratime","nodiratime","_netdev",
+                    "x-systemd.automount","x-systemd.idle-timeout","x-systemd.mount-timeout",
+                    "dir_mode", "file_mode", "umask"]
         extraOpt = []
         for opt in options:
-            if not default and not opt in defOpt:
+            if not default and not self.stripopt(opt) in defOpt:
                 extraOpt.append(opt)
-            elif default and opt in defOpt:
+            elif default and self.stripopt(opt) in defOpt:
                 extraOpt.append(opt)
         return extraOpt
 
+    def systemdReload(self, remote):
+        retval = False
+        ctl = systemdctl(self.logger)
+        if ctl.available():
+            retval = ctl.daemonReload()
+            if retval:
+                if remote:
+                    retval = ctl.restart("remote-fs.target")
+                else:
+                    retval = ctl.restart("local-fs.target")
+        del ctl
+        return retval
+
 
     ################## INTERNAL FUNCTIONS ###################
-    
+
     def getEntryLine(self, uuid = "", fsname = "", label = ""):
         retuuid = ""
         line = self.findEntryLine(uuid, fsname, label)
@@ -573,6 +647,47 @@ class fstab(object):
         else:
             rettype = self.tune(type)
         return rettype
+
+    def setopt(self, options, tag, value):
+        opt = tag.strip() + "=" + str(value)
+        options.append(opt)
+
+    def getopt(self, options, tag):
+        hasopt = False
+        value = 0
+
+        for opt in options:
+            if tag in opt:
+                hasopt = True
+                try:
+                    value = opt.split("=")[1].strip()
+                except:
+                    pass
+                break
+
+        return hasopt, value
+
+    def removeopt(self, options, tag):
+        hasopt = False
+
+        for opt in options:
+            if tag in opt:
+                hasopt = True
+                options.remove(opt)
+                break
+
+        return hasopt
+
+    def stripopt(self, opt):
+        tag = ""
+
+        try:
+            tag = opt.split("=")[0].strip()
+        except:
+            pass
+
+        return tag
+
 ######################### MAIN ##########################
 if __name__ == "__main__":
     pass

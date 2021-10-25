@@ -41,7 +41,7 @@ class xcd(xnas_engine):
         self.handleArgs(argv)
         name, type = self.dir.parseName(self.settings)
         db, obj = self.findName(name, type)
-        xcheck = xnas_check(self, lightCheck = True, json = True)
+        xcheck = xnas_check(self, json = True)
         if xcheck.ErrorExitCmd(xcheck.check(), self.settings, obj):
             if self.settings["json"]:
                 self.printJsonResult(False)
@@ -89,10 +89,7 @@ class xcd(xnas_engine):
 
         self.settings.update(optsnargs[0])
         self.settingsBool(self.settings, 'json')
-        if self.settings['json']:
-            self.StdoutLogging(False)
-        else:
-            self.StdoutLogging(True)
+        self.StdoutLogging(False)
 #########################################################
 
 ######################### MAIN ##########################
