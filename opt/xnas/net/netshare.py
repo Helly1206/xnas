@@ -13,6 +13,7 @@ from copy import deepcopy
 from shares.share import share
 from net.cifsshare import cifsshare
 from net.nfsshare import nfsshare
+from net.cifsemptybin import cifsemptybin
 from common.stdin import stdin
 from common.xnas_engine import groups
 #########################################################
@@ -313,6 +314,9 @@ class netshare(object):
             else:
                 self.logger.warning("Privileges are only available on cifs netshares")
         return retval
+
+    def bin(self, name):
+        return cifsemptybin(self.engine).emptyBin(name)
 
     def refresh(self, type = ""):
         retval1 = False

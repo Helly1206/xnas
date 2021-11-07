@@ -126,6 +126,15 @@ class xnas(xnas_engine):
                     self.printUnmarked("xnas settings updated")
                 else:
                     self.printUnmarked("Unable update xnas settings")
+        elif self.settings["command"] == "acl":
+            type = ""
+            if self.hasSetting(self.settings,"type"):
+                type = self.settings["type"]
+            result = self.getAclList(type)
+            if self.settings["json"]:
+                self.printJsonResult(result)
+            else:
+                self.printUnmarked(result)
         else:
             self.parseError("Unknown command argument")
             result = False
@@ -141,6 +150,7 @@ class xnas(xnas_engine):
                  "rst": "restores backups [rst <type>] (type: fstab)",
                  "srv": "sets xservices options (restarts services)",
                  "upd": "update xnas settings to latest version",
+                 "acl": "generate autocomplete list [acl <type>]",
                  "-": "checks all shared folders"}
         xopts = {"backup": "backup id to restore <string> (rst) (auto = empty)",
                  "show": "show current dynmounts and their status (srv)",
@@ -148,13 +158,14 @@ class xnas(xnas_engine):
                  "enable": "enables or disables xservices (srv) (default = true)",
                  "zfshealth": "disables degraded zfs pools (srv) (default = false)",
                  "removable": "dynmount devices not in fstab (srv) (default = false)",
+                 "binenable": "enables or disables cifs bin (srv) (default = true)",
                  "afenable": "enables or disables autofix (srv) (default = true)",
                  "afretries": "number of retries during autofix (srv) (default = 3)",
                  "afinterval": "autofix retry interval (srv) (default = 60)",
                  "settings": "lists current settings (srv)"}
         extra = ('xservices run as a service for dynmount, autofix and also handles emptying\n'
         'the cifs recyclebin if required. See "interval", "enable", "removable",\n'
-        '"afenable", "afretries" and "afinterval" options.\n'
+        '"binenable", "afenable", "afretries" and "afinterval" options.\n'
         'xservices is always restarted after calling the "srv" command.\n'
         'Options may be entered as single JSON string using full name, e.g.\n'
         'xnas rst fstab \'{"backup": "2"}\'\n'
@@ -267,6 +278,7 @@ class xnas(xnas_engine):
             settings["dyninterval"] = 60
             settings["dynzfshealth"] = False
             settings["dynremovable"] = False
+            settings["cifsautobinenable"] = True
             settings["autofixenable"] = True
             settings["autofixretries"] = 3
             settings["autofixinterval"] = 60
@@ -299,6 +311,11 @@ class xnas(xnas_engine):
         if self.hasSetting(self.settings,"afenable"):
             if settings["autofixenable"] != self.toBool(self.settings["afenable"]):
                 settings["autofixenable"] = self.toBool(self.settings["afenable"])
+                updated = True
+
+        if self.hasSetting(self.settings,"binenable"):
+            if settings["cifsautobinenable"] != self.toBool(self.settings["binenable"]):
+                settings["cifsautobinenable"] = self.toBool(self.settings["binenable"])
                 updated = True
 
         if self.hasSetting(self.settings,"afretries"):
@@ -458,6 +475,8 @@ class xnas(xnas_engine):
 
         settings = self.checkGroup(groups.SETTINGS)
         if settings:
+            if not "cifsautobinenable" in settings:
+                settings["cifsautobinenable"] = True
             if not "autofixenable" in settings:
                 settings["autofixenable"] = True
             if not "autofixretries" in settings:

@@ -163,7 +163,7 @@ class xremotemount(xnas_engine):
                  "server": "server for remote mount <string> (add)",
                  "sharename": "sharename for remote mount <string> (add)",
                  "mountpoint": "mountpoint <string> (add)",
-                 "type": "type <string> (davfs, cifs, nfs or nfs4) (add)",
+                 "type": "type <string> (davfs, cifs, s2hfs, nfs or nfs4) (add)",
                  "options": "extra options, besides _netdev <string> (add)",
                  "rw": "mount rw <boolean> (add)",
                  "freq": "dump value <value> (add)",
@@ -172,14 +172,22 @@ class xremotemount(xnas_engine):
                  "sacc": "superuser access level (,r,w) (default = rw) (add)",
                  "username": "remote mount access username (guest if omitted) (add)",
                  "password": "remote mount access password (add)",
+                 "action": "addkey, addcred, delkey, delcred (s2hfs) (add)",
                  "method": "mount method <string> (see below) (add)",
                  "idletimeout": "unmount when idle timeout <int> (default = 30) (add)",
                  "timeout": "mounting timeout <int> (default = 10) (add)"}
         extra = ('URL generation from settings:\n'
         'davfs: <https>://<sharename>.<server>, e.g. https://test.myserver.com/dav.php/\n'
+        's2hfs: <user>@<server>:<sharename>   , e.g. test@192.168.1.1:myfolder\n'
         'cifs : //<server>/<sharename>        , e.g. //192.168.1.1/test\n'
         'nfs  : server:<sharename>            , e.g. 192.168.1.1:/test\n'
         '"nfs4" is prefered as type for nfs, "nfs" as type refers to nfs3\n'
+        'A specific action for s2hfs (sshfs) can be defined:\n'
+        'addkey : generate and add an ssh key pair for accessing s2hfs\n'
+        'addcred: add credentials for accessing s2hfs\n'
+        'delkey : delete an existing key pair\n'
+        'delcred: delete existing credentials\n'
+        'At del, keys and credentials will be deleted\n'
         'Mount methods:\n'
         'disabled: do not mount\n'
         'startup : mount from fstab during startup\n'

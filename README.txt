@@ -1,4 +1,4 @@
-XNAS v0.9.2
+XNAS v1.0.2
 
 XNAS -- Extended NAS functionality on a linux computer
 ==== == ======== === ============= == = ===== ========
@@ -50,6 +50,7 @@ xnas <arguments> <options>
     rst           : restores backups [rst <type>] (type: fstab)
     srv           : sets xservices options (restarts services)
     upd           : update xnas settings to latest version
+    acl           : generate autocomplete list [acl <type>]
     <no arguments>: checks all shared folders
 <options>:
     -h, --help      : this help file
@@ -61,6 +62,7 @@ xnas <arguments> <options>
     -e, --enable    : enables or disables xservices (srv) (default = true)
     -z, --zfshealth : disables degraded zfs pools (srv) (default = false)
     -r, --removable : dynmount devices not in fstab (srv) (default = false)
+    -B, --binenable : enables or disables cifs bin (srv) (default = true)
     -a, --afenable  : enables or disables autofix (srv) (default = true)
     -A, --afretries : number of retries during autofix (srv) (default = 3)
     -f, --afinterval: autofix retry interval (srv) (default = 60)
@@ -68,7 +70,7 @@ xnas <arguments> <options>
 
 xservices run as a service for dynmount, autofix and also handles emptying
 the cifs recyclebin if required. See "interval", "enable", "removable",
-"afenable", "afretries" and "afinterval" options.
+"binenable", "afenable", "afretries" and "afinterval" options.
 xservices is always restarted after calling the "srv" command.
 Options may be entered as single JSON string using full name, e.g.
 xnas rst fstab '{"backup": "2"}'
@@ -151,15 +153,23 @@ xremotemount <arguments> <options>
     -a, --sacc       : superuser access level (,r,w) (default = rw) (add)
     -U, --username   : remote mount access username (guest if omitted) (add)
     -P, --password   : remote mount access password (add)
+    -A, --action     : addkey, addcred, delkey, delcred (s2hfs) (add)
     -M, --method     : mount method <string> (see below) (add)
     -I, --idletimeout: unmount when idle timeout <int> (default = 30) (add)
     -e, --timeout    : mounting timeout <int> (default = 10) (add)
 
 URL generation from settings:
 davfs: <https>://<sharename>.<server>, e.g. https://test.myserver.com/dav.php/
+s2hfs: <user>@<server>:<sharename>   , e.g. test@192.168.1.1:myfolder
 cifs : //<server>/<sharename>        , e.g. //192.168.1.1/test
 nfs  : server:<sharename>            , e.g. 192.168.1.1:/test
 "nfs4" is prefered as type for nfs, "nfs" as type refers to nfs3
+A specific action for s2hfs (sshfs) can be defined:
+addkey : generate and add an ssh key pair for accessing s2hfs
+addcred: add credentials for accessing s2hfs
+delkey : delete an existing key pair
+delcred: delete existing credentials
+At del, keys and credentials will be deleted
 Mount methods:
 disabled: do not mount
 startup : mount from fstab during startup
@@ -204,7 +214,10 @@ xnetshare <arguments> <options>
     hms           : configure homes for cifs [hms]
     usr           : configure users for cifs [usr (add, del, exists, list)]
     prv           : configure user privileges for cifs [prv <name>]
+    bin           : empty recycle bin for cifs [bin <name>] or [bin] for all
     rfr           : refreshes netshares
+    lst           : lists xshares to netshare [lst]
+    ip            : generates ip address/ mask
     <no arguments>: show netshares and their status
 <options>:
     -h, --help   : this help file
@@ -219,8 +232,9 @@ Options may be entered as single JSON string using full name, e.g.
 xnetshare add test '{"type": "cifs"}'
 Mind the single quotes to bind the JSON string.
 
-'recyclemaxage' is handled by xservices and needs xservices to be enabled.
-command: 'xnas srv -e' (xservices is enabled by default)
+"recyclemaxage' is handled by xservices and needs xservices and
+cifs automatically empty recycle bin to be enabled.
+command: 'xnas srv -e -B' (xservices and bin are enabled by default)
 Specific options for 'xnetshare add -t cifs':
     <options>:
         -c, --comment           : comment for cifs share (default = '')
@@ -315,7 +329,6 @@ Dynmount:        dynamically mount mounts or remotemounts when they become
                  available. Options can be changed with: "xnas srv ..."
 Emptyrecyclebin: automatically delete old files from cifs recycle bin
                  Maximum age can be changed with: "xnetshare add ..."
-                 The recyclebin is emptied every day at midnight
 Autofix:         Check for errors and automatically fix them
                  Options can be changed with: "xnas srv ..."
 xservices can be enabled or disabled with "xnas srv -e

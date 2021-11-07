@@ -17,8 +17,8 @@ from net.cifsshare import cifsshare
 #########################################################
 
 ####################### GLOBALS #########################
-CIFSEMPTYTIMESOD = 0
 SECONDSINDAY     = 24*60*60
+DEFAULTINTERVAL  = 7*SECONDSINDAY
 #########################################################
 
 ###################### FUNCTIONS ########################
@@ -29,14 +29,18 @@ SECONDSINDAY     = 24*60*60
 # Class : cifsemptybin                                  #
 #########################################################
 class cifsemptybin(object):
-    def __init__(self, engine, verbose = False):
-        self.engine    = engine
-        self.verbose   = verbose
-        self.logger    = logging.getLogger('xnas.cifsemptybin')
-        self.timer     = None
-        self.isRunning = False
-        self.first     = True
-        self.start()
+    def __init__(self, engine, verbose = False, manual = True, autoenable = True):
+        self.engine     = engine
+        self.autoenable = autoenable
+        self.verbose    = verbose
+        self.logger     = logging.getLogger('xnas.cifsemptybin')
+        self.timer      = None
+        self.isRunning  = False
+        self.first      = True
+        self.interval   = 0
+        self.minage     = 0
+        if not manual:
+            self.start()
 
     def __del__(self):
         pass
@@ -46,6 +50,25 @@ class cifsemptybin(object):
         if self.timer:
             self.timer.join(5)
         del self.timer
+
+    def update(self, autoenable):
+        if autoenable:
+            if not self.autoenable:
+                if not self.isRunning:
+                    self.first = True
+                    self.start()
+        elif self.autoenable:
+            self.stop()
+        self.autoenable = autoenable
+
+    def emptyBin(self, key):
+        retval = False
+        if not key:
+            retval = self.forceEmptyAll()
+        else:
+            retval = self.forceEmpty(key)
+
+        return retval
 
     ################## INTERNAL FUNCTIONS ###################
 
@@ -57,9 +80,17 @@ class cifsemptybin(object):
                 if self.verbose:
                     self.logger.info("Check now")
             else:
+                if self.interval == 0:
+                    if self.minage > 0:
+                        interval = self.minage * SECONDSINDAY
+                    else:
+                        interval = DEFAULTINTERVAL
+                else:
+                    interval = self.interval
                 interval = SECONDSINDAY - self.getNowSod()
                 if self.verbose:
                     self.logger.info("Check in {} seconds".format(interval))
+            self.interval = 0
             self.timer = Timer(interval, self.run)
             self.timer.start()
             self.isRunning = True
@@ -84,6 +115,7 @@ class cifsemptybin(object):
 
     def getBins(self):
         bins = []
+        self.minage = 0
         netshares = self.engine.checkGroup(groups.NETSHARES)
         if netshares:
             cifsShare = cifsshare(self.logger, self.engine)
@@ -99,6 +131,10 @@ class cifsemptybin(object):
                         bins.append(recbin)
                         if self.verbose:
                             self.logger.info("Recycle bin with age limit found for '{}' (maxage = {})".format(key, recbin['maxage']))
+                        if (self.minage == 0) or (recbin['maxage'] < self.minage):
+                            self.minage = recbin['maxage']
+                            if self.verbose:
+                                self.logger.info("Recycle bin with minimum age updated (minage = {})".format(self.minage))
             del cifsShare
 
         return bins
@@ -109,7 +145,34 @@ class cifsemptybin(object):
             self.loopFolderEmpty(recbin['location'])
         return
 
-    def loopFolderRemove(self, location, maxage):
+    def forceEmptyAll(self):
+        retval = True # always return true, even if nothing to be done
+        netshares = self.engine.checkGroup(groups.NETSHARES)
+        if netshares:
+            cifsShare = cifsshare(self.logger, self.engine)
+            for key, netshare in netshares.items():
+                if netshare['type'] == 'cifs':
+                    binloc = cifsShare.getRecycleBin(key)
+                    if binloc:
+                        self.loopFolderRemove(binloc, force = True)
+                        self.loopFolderEmpty(binloc)
+                        retval = True
+            del cifsShare
+        return retval
+
+    def forceEmpty(self, key):
+        retval = True # always return true, even if nothing to be done
+        netshare = self.engine.checkKey(groups.NETSHARES, key)
+        if netshare:
+            if netshare['type'] == 'cifs':
+                binloc = cifsshare(self.logger, self.engine).getRecycleBin(key)
+                if binloc:
+                    self.loopFolderRemove(binloc, force = True)
+                    self.loopFolderEmpty(binloc)
+                    retval = True
+        return retval
+
+    def loopFolderRemove(self, location, maxage = 0, force = False):
         if not os.path.isdir(location):
             return
         with os.scandir(location) as entries:
@@ -121,14 +184,25 @@ class cifsemptybin(object):
                         self.loopFolderRemove(newlocation, maxage)
                     else:
                         age = self.getAge(info.st_atime)
+                        keeptime = self.keepTime(age, maxage)
                         if self.verbose:
-                            self.logger.info("File '{}' has age of {} days".format(entry.name, age))
-                        if age > maxage:
+                            self.logger.info("File '{}' has age of {} days".format(entry.name, int(age/SECONDSINDAY)))
+                        if force or (keeptime <= 0):
                             try:
                                 os.remove(newlocation)
-                                self.logger.info("Recycle bin file '{}' exceeded max age of {} days and is removed".format(newlocation, maxage))
+                                if self.verbose:
+                                    if force:
+                                        self.logger.info("Recycle bin file '{}' is forced removed".format(newlocation))
+                                    else:
+                                        self.logger.info("Recycle bin file '{}' exceeded max age of {} days and is removed".format(newlocation, maxage))
                             except:
-                                self.logger.error("Error removing recycle bin file: '{}' exceeded max age of {} days".format(newlocation, maxage))
+                                if force:
+                                    self.logger.error("Error forced removing recycle bin file: '{}'".format(newlocation))
+                                else:
+                                    self.logger.error("Error removing recycle bin file: '{}' exceeded max age of {} days".format(newlocation, maxage))
+                        elif not force:
+                            if (self.interval == 0) or (self.interval > keeptime):
+                                self.interval = keeptime
                 except:
                     self.logger.error("Error scanning recycle bin files for exceeding max age")
         return
@@ -152,16 +226,19 @@ class cifsemptybin(object):
                         if rmFolder:
                             try:
                                 os.rmdir(newlocation)
-                                self.logger.info("Empty recycle bin folder '{}' removed".format(newlocation))
+                                if self.verbose:
+                                    self.logger.info("Empty recycle bin folder '{}' removed".format(newlocation))
                             except:
                                 self.logger.error("Error removing empty recycle bin folder '{}'".format(newlocation))
                 except:
                     self.logger.error("Error scanning empty recycle bin folders")
         return
 
+    def keepTime(self, age, maxage):
+        return (maxage * SECONDSINDAY) - age
+
     def getAge(self, time):
-        times = datetime.now().timestamp() - time
-        return int(times/(60*60*24))
+        return int(datetime.now().timestamp() - time)
 
 ######################### MAIN ##########################
 if __name__ == "__main__":

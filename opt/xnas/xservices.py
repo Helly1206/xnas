@@ -108,6 +108,10 @@ class xservices(xnas_engine):
         if removable == None:
             removable = False
 
+        cifsautobinenable = self.checkKey(groups.SETTINGS,"cifsautobinenable")
+        if cifsautobinenable == None:
+            cifsautobinenable = True
+
         autofixenable = self.checkKey(groups.SETTINGS,"autofixenable")
         if autofixenable == None:
             autofixenable = True
@@ -124,7 +128,7 @@ class xservices(xnas_engine):
 
         if self.checkKey(groups.SETTINGS,"srvenable"):
             self.autofix = xnas_autofix(self, self.verbose, autofixenable, autofixretries, autofixinterval)
-            self.cifsemptybin = cifsemptybin(self, self.verbose)
+            self.cifsemptybin = cifsemptybin(self, self.verbose, False, cifsautobinenable)
             self.dynmount = dynmount(self, self.verbose, zfshealth, removable)
             self.dynmountremote = dynmountremote(self, self.verbose)
 
@@ -142,7 +146,6 @@ class xservices(xnas_engine):
                  '                     available. Options can be changed with: "xnas srv ..."\n'
                  '    Emptyrecyclebin: automatically delete old files from cifs recycle bin\n'
                  '                     Maximum age can be changed with: "xnetshare add ..."\n'
-                 '                     The recyclebin is emptied every day at midnight\n'
                  '    Autofix:         Check for errors and automatically fix them\n'
                  '                     Options can be changed with: "xnas srv ..."\n'
                  'xservices can be enabled or disabled with "xnas srv -e"')
@@ -178,6 +181,13 @@ class xservices(xnas_engine):
         self.srvInterval = self.checkKey(groups.SETTINGS,"dyninterval")
         if self.srvInterval == None:
             self.srvInterval = 60
+
+        if self.cifsemptybin:
+            cifsautobinenable = self.checkKey(groups.SETTINGS,"cifsautobinenable")
+            if cifsautobinenable == None:
+                cifsautobinenable = True
+
+            self.cifsemptybin.update(cifsautobinenable)
 
         if self.autofix:
             autofixenable = self.checkKey(groups.SETTINGS,"autofixenable")

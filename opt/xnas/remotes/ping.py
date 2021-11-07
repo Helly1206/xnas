@@ -53,6 +53,10 @@ class ping(object):
         try:
             tmp = urlsplit(url)
             base = tmp.netloc
+            if not base:
+                # try to find between @ and :
+                part = url.split(":")[0]
+                base = part.split("@")[-1]
         except:
             pass
         return base

@@ -19,7 +19,7 @@ import re
 #########################################################
 
 ####################### GLOBALS #########################
-VERSION = "1.0.0"
+VERSION = "1.0.2"
 LOG_FILENAME     = "xnas.log"
 LOG_MAXSIZE      = 100*1024*1024
 HELPSTANDARD     = {"help": "this help file",
@@ -445,6 +445,27 @@ Version: {}""".format(ansi.bold, ansi.fg.blue, ansi.reset, ansi.italic, ansi.res
             val = var
         return val
 
+    def getAclList(self, type):
+        lst = []
+
+        if not type or type == "xmount":
+            items = self.checkGroup(groups.MOUNTS)
+            if items:
+                lst.extend(list(items.keys()))
+        if not type or type == "xremotemount":
+            items = self.checkGroup(groups.REMOTEMOUNTS)
+            if items:
+                lst.extend(list(items.keys()))
+        if not type or type == "xshare":
+            items = self.checkGroup(groups.SHARES)
+            if items:
+                lst.extend(list(items.keys()))
+        if not type or type == "xnetshare":
+            items = self.checkGroup(groups.NETSHARES)
+            if items:
+                lst.extend(list(items.keys()))
+
+        return " ".join(lst)
 
     ################## INTERNAL FUNCTIONS ###################
     def lentxt(self, txt):

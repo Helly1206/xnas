@@ -1,0 +1,34 @@
+#/usr/bin/env bash
+_xmount_completions() {
+  list=$(xnas acl xmount)
+  COMPREPLY=($(compgen -W "${list}" "${COMP_WORDS[2]}"))
+}
+
+_xremotemount_completions() {
+  list=$(xnas acl xremotemount)
+  COMPREPLY=($(compgen -W "${list}" "${COMP_WORDS[2]}"))
+}
+
+_xshare_completions() {
+  list=$(xnas acl xshare)
+  COMPREPLY=($(compgen -W "${list}" "${COMP_WORDS[2]}"))
+}
+
+_xnetshare_completions() {
+  list=$(xnas acl xnetshare)
+  COMPREPLY=($(compgen -W "${list}" "${COMP_WORDS[2]}"))
+}
+
+_xnas_completions() {
+  list=$(xnas acl)
+  COMPREPLY=($(compgen -W "${list}" "${COMP_WORDS[1]}"))
+}
+
+complete -F _xmount_completions xmount
+complete -F _xremotemount_completions xremotemount
+complete -F _xshare_completions xshare
+complete -F _xnetshare_completions xnetshare
+complete -F _xnas_completions xcd
+complete -F _xnas_completions xdir
+complete -F _xnas_completions xpd
+

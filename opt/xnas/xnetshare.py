@@ -150,6 +150,15 @@ class xnetshare(xnas_engine):
             elif self.hasSetting(self.settings, "list"):
                 self.prettyPrintTable(result)
                 result = True
+        elif self.settings["command"] == "bin":
+            self.needSudo()
+            result = False
+            if "name" in self.settings:
+                result = Netshare.bin(self.settings["name"])
+            else:
+                result = Netshare.bin(None)
+            if self.settings["json"]:
+                self.printJsonResult(result)
         elif self.settings["command"] == "rfr":
             self.needSudo()
             result = Netshare.refresh()
@@ -201,6 +210,7 @@ class xnetshare(xnas_engine):
                  "hms": "configure homes for cifs [hms]",
                  "usr": "configure users for cifs [usr (add, del, exists, ...)]",
                  "prv": "configure user privileges for cifs [prv <name>]",
+                 "bin": "empty recycle bin for cifs [bin <name>] or [bin] for all",
                  "rfr": "refreshes netshares",
                  "lst": "lists xshares to netshare [lst]",
                  "ip": "generates ip address/ mask",
@@ -236,8 +246,9 @@ class xnetshare(xnas_engine):
                             "audit": "use audit (default = {})".format(ShareCifs.tf(False)),
                             "extraoptions": "extra options (default = {})".format("'{}'"),
                             "settings": "lists current netshare settings"}
-                specextra = ("'recyclemaxage' is handled by xservices and needs xservices to be enabled.\n"
-                "command: 'xnas srv -e' (xservices is enabled by default)\n")
+                specextra = ("'recyclemaxage' is handled by xservices and needs xservices and \n"
+                "cifs automatically empty recycle bin to be enabled.\n"
+                "command: 'xnas srv -e -B' (xservices and bin are enabled by default)\n")
             elif type == "nfs":
                 specopts = {#"comment": "comment for nfs share (default = '')", NOT SUPPORTED
                             "client": "ip address/mask (default = {})".format(ip().mask(24)),

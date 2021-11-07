@@ -1,3 +1,10 @@
+[B]1.0.2[/B]
+- Setup emptying cifs recycle bin for better different trigger mechanism
+- Added option to switch off automatic emptying of cifs recycle bin
+- Added possibility to manually empty cifs recycle bin
+- Added s2hfs (sshfs) to remotemount  filesystems
+- Added autocompletion for xmounts, xremotemounts, xshares and xnetshares
+
 [B]1.0.0[/B]
 - Fixed xcd not changing folder in case of errors
 - Fixed mountpoint error if not available

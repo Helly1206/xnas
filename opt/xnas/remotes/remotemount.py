@@ -18,13 +18,14 @@ from common.shell import shell
 from remotes.davfs import davfs
 from remotes.cifs import cifs
 from remotes.nfs import nfs
+from remotes.s2hfs import s2hfs
 from remotes.ping import ping
 #########################################################
 
 ## Indeed fsname is used
 """
 {'line': 24,
-'content': {'fsname': 'https://Helly1206.stackstorage.com/remote.php/webdav/',
+'content': {'fsname': 'https://xxxxx.yyyyyy.com/remote.php/webdav/',
 'label': '', 'uuid': '', 'mountpoint': '/mnt/test', 'type': 'davfs',
 'options': ['_netdev', 'user'], 'dump': '0', 'pass': '0'}}]
 """
@@ -39,7 +40,8 @@ from remotes.ping import ping
 # df shows contents of remotemounts df --output=source,size,pcent,target -h /mnt/OS
 
 ####################### GLOBALS #########################
-FSTYPES = ["cifs", "davfs", "nfs", "nfs4"]
+FSTYPES = ["cifs", "davfs", "nfs", "nfs4", "s2hfs"]
+
 #########################################################
 
 ###################### FUNCTIONS ########################
@@ -426,20 +428,7 @@ class remotemount(fstab, mountfs, mountpoint):
 
         # Credentials
         if retval:
-            if self.hasTypeObj(typeObj) and entryNew['type'] != 'nfs' and entryNew['type'] != 'nfs4':
-                if 'username' in self.engine.settings:
-                    uspss = self.UserPass(self.engine.settings)
-                    guest = not uspss[0]
-                    if not guest:
-                        if not uspss[1]:
-                            if uspss[0] != typeObj.getCredentials(entryNew['fsname']):
-                                retval = typeObj.addCredentials(entryNew['fsname'], uspss[0], uspss[1])
-                        else:
-                            retval = typeObj.addCredentials(entryNew['fsname'], uspss[0], uspss[1])
-                else:
-                    guest = not typeObj.getCredentials(entryNew['fsname'])
-            else:
-                guest = False
+            retval, guest = self.manageCredentials(typeObj, entryNew)
 
         #check mode and other settings
         if retval:
@@ -495,6 +484,7 @@ class remotemount(fstab, mountfs, mountpoint):
                 method = self.engine.settings['method']
             if (method == "startup") or (method == "dynmount"):
                 retval = self.mnt(entryNew['fsname'], dbItem = False, mpoint = entryNew['mountpoint'])
+                retval = True # continue even if not able to mount
 
         if retval and changed:
             retval = fstab.systemdReload(self, remote = True)
@@ -540,6 +530,9 @@ class remotemount(fstab, mountfs, mountpoint):
                         if self.hasTypeObj(typeObj):
                             if typeObj.delCredentials(url):
                                 self.logger.info("Removed credentials")
+                            if entry['type'] == "s2hfs":
+                                if typeObj.delKeys(url):
+                                    self.logger.info("Removed keys")
                         self.delTypeObj(typeObj)
         if retval:
             self.logger.info("{} deleted".format(name))
@@ -743,6 +736,8 @@ class remotemount(fstab, mountfs, mountpoint):
             typeObj = cifs(self.logger)
         elif type == 'nfs' or type == 'nfs4':
             typeObj = nfs(self.logger)
+        elif type == 's2hfs':
+            typeObj = s2hfs(self.logger)
 
         if self.hasTypeObj(typeObj):
             if not typeObj.available():
@@ -888,6 +883,10 @@ class remotemount(fstab, mountfs, mountpoint):
                     retval = False
                 if retval:
                     newEntry = False
+                    if entry['type'] == "s2hfs":
+                        urlparts = entry['fsname'].split("@")
+                        if len(urlparts) > 1:
+                            self.engine.settings["username"] = urlparts[0]
                     if not 'method' in self.engine.settings:
                         if not "noauto" in entry["options"]:
                             self.engine.settingsStr(self.engine.settings, 'method', True, 'startup')
@@ -902,7 +901,7 @@ class remotemount(fstab, mountfs, mountpoint):
             if retval:
                 if 'server' in self.engine.settings and 'type' in self.engine.settings:
                     if not 'sharename' in self.engine.settings:
-                        if self.engine.settings['type'] == "davfs":
+                        if self.engine.settings['type'] == "davfs" or self.engine.settings['type'] == "s2hfs":
                             self.engine.settingsStr(self.engine.settings, 'sharename')
                         else:
                             self.logger.warning("{} not found, no sharename entered".format(name))
@@ -913,6 +912,14 @@ class remotemount(fstab, mountfs, mountpoint):
                         newEntry = True
                         if not 'method' in self.engine.settings:
                             self.engine.settingsStr(self.engine.settings, 'method', True, 'auto')
+                        if self.engine.settings['type'] == "s2hfs":
+                            urlparts = self.engine.settings["server"].split("@")
+                            if "username" in self.engine.settings:
+                                if self.engine.settings["username"] != urlparts[0]:
+                                    urlparts.insert(0, self.engine.settings["username"])
+                                    self.engine.settings["server"] = "@".join(urlparts)
+                            elif len(urlparts) > 1:
+                                self.engine.settings["username"] = urlparts[0]
                     else:
                         self.logger.error("{} not found, and invalid type entered".format(name))
                         retval = False
@@ -944,6 +951,62 @@ class remotemount(fstab, mountfs, mountpoint):
                     self.engine.settings['timeout'] = 10
 
         return retval, typeObj, newEntry
+
+    def manageCredentials(self, typeObj, entry):
+        retval = True
+        guest = False
+        if self.hasTypeObj(typeObj):
+            if entry['type'] == "s2hfs":
+                if 'action' in self.engine.settings:
+                    uspss = self.UserPass(self.engine.settings)
+                    if self.engine.settings['action'].lower().strip() == "addkey":
+                        if not uspss[1]:
+                            if uspss[0] and uspss[0] != typeObj.getCredentials(entry['fsname']):
+                                retval = typeObj.addKeys(entry['fsname'], uspss[0], uspss[1])
+                                if retval:
+                                    self.logger.info("Added keys")
+                        else:
+                            retval = typeObj.addKeys(entry['fsname'], uspss[0], uspss[1])
+                            if retval:
+                                self.logger.info("Added keys")
+                    elif self.engine.settings['action'].lower().strip() == "addcred":
+                        if not uspss[1]:
+                            if uspss[0] and uspss[0] != typeObj.getCredentials(entry['fsname']):
+                                retval = typeObj.addCredentials(entry['fsname'], uspss[0], uspss[1])
+                                if retval:
+                                    self.logger.info("Added credentials")
+                        else:
+                            retval = typeObj.addCredentials(entry['fsname'], uspss[0], uspss[1])
+                            if retval:
+                                self.logger.info("Added credentials")
+                    elif self.engine.settings['action'].lower().strip() == "delkey":
+                        retval = typeObj.delKeys(entry['fsname'], uspss[0])
+                        if retval:
+                            self.logger.info("Removed keys")
+                    elif self.engine.settings['action'].lower().strip() == "delcred":
+                        retval = typeObj.delCredentials(entry['fsname'], uspss[0])
+                        if retval:
+                            self.logger.info("Removed credentials")
+                    elif self.engine.settings['action'].lower().strip() != "none":
+                        self.logger.warning("Invalid action entered, action not used: {}".format(self.engine.settings['action']))
+            elif entry['type'] != 'nfs' and entry['type'] != 'nfs4':
+                if 'username' in self.engine.settings:
+                    uspss = self.UserPass(self.engine.settings)
+                    guest = not uspss[0]
+                    if not guest:
+                        if not uspss[1]:
+                            if uspss[0] != typeObj.getCredentials(entry['fsname']):
+                                retval = typeObj.addCredentials(entry['fsname'], uspss[0], uspss[1])
+                                if retval:
+                                    self.logger.info("Added credentials")
+                        else:
+                            retval = typeObj.addCredentials(entry['fsname'], uspss[0], uspss[1])
+                            if retval:
+                                self.logger.info("Added credentials")
+                else:
+                    guest = not typeObj.getCredentials(entry['fsname'])
+        return retval, guest
+
 ######################### MAIN ##########################
 if __name__ == "__main__":
     pass
