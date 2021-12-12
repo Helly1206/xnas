@@ -1,3 +1,9 @@
+xnas (1.03) stable; urgency=low
+
+  * Fixed small bug in xcd, xdir
+
+ -- Helly1206 <hellyrulez@hotmail.com>  Sun, 12 Dec 2021 10:42:42 +0100
+
 xnas (1.02) stable; urgency=low
 
   * Setup emptying cifs recycle bin for better different trigger mechanism

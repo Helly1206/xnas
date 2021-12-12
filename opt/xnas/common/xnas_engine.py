@@ -19,7 +19,7 @@ import re
 #########################################################
 
 ####################### GLOBALS #########################
-VERSION = "1.0.2"
+VERSION = "1.0.3"
 LOG_FILENAME     = "xnas.log"
 LOG_MAXSIZE      = 100*1024*1024
 HELPSTANDARD     = {"help": "this help file",

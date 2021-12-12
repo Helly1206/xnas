@@ -15,7 +15,6 @@ from remotes.remotemount import remotemount
 from shares.share import share
 from net.netshare import netshare
 from common.xnas_engine import objects
-from common.xnas_engine import groups
 #########################################################
 
 ####################### GLOBALS #########################
@@ -55,8 +54,7 @@ class xnas_dir(ls):
         found, obj = self.engine.findName(name, type)
         if found:
             if obj == objects.MOUNT:
-                db = self.engine.checkKey(groups.MOUNTS, name)
-                folder = mount(self.engine).getMountpoint(db)
+                folder = mount(self.engine).getMountpoint(name)
             elif obj == objects.REMOTEMOUNT:
                 folder = remotemount(self.engine).getMountpoint(name)
             elif obj == objects.SHARE or obj == objects.NETSHARE:
