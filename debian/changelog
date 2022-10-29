@@ -1,3 +1,9 @@
+xnas (1.04) stable; urgency=low
+
+  * Fixed bug in shares folder not existing
+
+ -- Helly1206 <hellyrulez@hotmail.com>  Sat, 29 Oct 2022 10:39:15 +0100
+
 xnas (1.03) stable; urgency=low
 
   * Fixed small bug in xcd, xdir

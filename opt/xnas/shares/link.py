@@ -49,9 +49,10 @@ class link(object):
                 self.logger.error("Non empty file or folder exists at share link")
             else:
                 try:
+                    self.hasSharesFolder(loc)
                     os.symlink(source, loc)
                     retval = True
-                except:
+                except Exception as e:
                     self.logger.error("Adding share")
                     self.logger.error(e)
         return retval
@@ -68,6 +69,16 @@ class link(object):
         if os.path.islink(loc):
             lnk = os.readlink(loc)
         return lnk
+    
+    def hasSharesFolder(self, loc):
+        sharesFolder = os.path.dirname(loc)
+        try:
+            if not os.path.exists(sharesFolder):
+                os.mkdir(sharesFolder)
+        except Exception as e:
+            self.logger.error("Unable to add shares folder: {}".format(sharesFolder))
+            self.logger.error(e)
+        return
 
 ######################### MAIN ##########################
 if __name__ == "__main__":
