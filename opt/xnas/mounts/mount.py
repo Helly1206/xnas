@@ -55,18 +55,19 @@ class mount(devices, fstab, mountfs, zfs, mountpoint):
             listentry = {}
             #Shrink I
             if entry["uuid"]:
-                listentry["uuid/ fsname/ label"] = entry["uuid"]
+                listentry["device"] = entry["uuid"]
             elif entry["fsname"]:
-                listentry["uuid/ fsname/ label"] = entry["fsname"]
+                listentry["device"] = entry["fsname"]
             else:
-                listentry["uuid/ fsname/ label"] = entry["label"]
+                listentry["device"] = entry["label"]
+            listentry["uuid"] = self.getUuid(entry).upper()
             #copy
             for key, value in entry.items():
                 if key == "options":
                     listentry[key] = ",".join(value)
                 elif key != "fsname" and key != "uuid" and key != "label":
                     listentry[key] = value
-            dbkey, dbval = self.engine.findInGroup(groups.MOUNTS, 'uuid', self.getUuid(entry).upper())
+            dbkey, dbval = self.engine.findInGroup(groups.MOUNTS, 'uuid', listentry["uuid"])
             if dbkey:
                 listentry['xmount'] = dbkey
             else:
@@ -76,7 +77,8 @@ class mount(devices, fstab, mountfs, zfs, mountpoint):
         entries = zfs.getEntries(self)
         for entry in entries:
             listentry = {}
-            listentry["uuid/ fsname/ label"] = entry["label"]
+            listentry["device"] = entry["label"]
+            listentry["uuid"] = self.getUuid(entry).upper()
             #copy
             for key, value in entry.items():
                 if key == "options":
@@ -675,6 +677,9 @@ class mount(devices, fstab, mountfs, zfs, mountpoint):
             else:
                 entry = fstab.getEntry(self, db['uuid'])
         return entry
+
+    def getDevicePath(self, name):
+        return self.getDevPath(name)
 
     ################## INTERNAL FUNCTIONS ###################
 

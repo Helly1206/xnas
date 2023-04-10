@@ -1,4 +1,4 @@
-XNAS v1.0.4
+XNAS v1.1.0
 
 XNAS -- Extended NAS functionality on a linux computer
 ==== == ======== === ============= == = ===== ========
@@ -86,8 +86,11 @@ xmount <arguments> <options>
     mnt           : mounts a mount [mnt <name>]
     umnt          : unmounts a mount if not referenced [umnt <name>]
     clr           : removes a mount, but leaves fstab [clr <name>]
+    shw           : shows current mount settings [shw <name>]
+    pth           : gets real device path of an fsname [pth <name>]
     lst           : lists xmount compatible fstab entries [lst]
     avl           : show available compatible devices not in fstab [avl]
+    blk           : show all compatible block devices [blk]
     <no arguments>: show mounts and their status
 <options>:
     -h, --help       : this help file

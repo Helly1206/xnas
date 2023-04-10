@@ -1,3 +1,11 @@
+xnas (1.10) stable; urgency=low
+
+  * Added support for logical volumes
+  * Added support for linked devices in fstab
+  * Some bugfixing
+
+ -- Helly1206 <hellyrulez@hotmail.com>  Sun, 9 Apr 2023 12:25:59 +0100
+
 xnas (1.04) stable; urgency=low
 
   * Fixed bug in shares folder not existing

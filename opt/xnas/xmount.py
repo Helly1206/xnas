@@ -16,7 +16,7 @@ from mounts.mount import mount
 #########################################################
 
 ####################### GLOBALS #########################
-NAMELIST = ["add", "del", "mnt", "umnt", "clr", "ena", "dis", "shw"]
+NAMELIST = ["add", "del", "mnt", "umnt", "clr", "ena", "dis", "shw", "pth"]
 NAMECHECK = ["del", "clr", "mnt", "dis", "shw"]
 #########################################################
 
@@ -121,6 +121,12 @@ class xmount(xnas_engine):
                 self.printJson(mountData)
             else:
                 self.prettyPrintTable(self.settings2Table(mountData))
+        elif self.settings["command"] == "pth":
+            pth = Mount.getDevicePath(self.settings["name"])
+            if self.settings["json"]:
+                self.printJson(pth)
+            else:
+                self.printUnmarked(pth)
         elif self.settings["command"] == "lst":
             entries = Mount.inDB()
             if self.settings["json"]:
@@ -159,6 +165,7 @@ class xmount(xnas_engine):
                  "umnt": "unmounts a mount if not referenced [umnt <name>]",
                  "clr": "removes a mount, but leaves fstab [clr <name>]",
                  "shw": "shows current mount settings [shw <name>]",
+                 "pth": "gets real device path of an fsname [pth <name>]",
                  "lst": "lists xmount compatible fstab entries [lst]",
                  "avl": "show available compatible devices not in fstab [avl]",
                  "blk": "show all compatible block devices [blk]",

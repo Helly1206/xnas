@@ -7,6 +7,7 @@
 #########################################################
 
 ####################### IMPORTS #########################
+import os
 import json
 from common.shell import shell
 #########################################################
@@ -84,7 +85,10 @@ class devices(object):
                 if device['uuid'].lower() == uuid.lower():
                     mydevice.append(device)
             elif fsname and device['fsname']:
-                if device['fsname'] == fsname:
+                # always use 'real' fsname
+                devfsname = self.getDevPath(device['fsname'])
+                infsname = self.getDevPath(fsname)
+                if devfsname == infsname:
                     mydevice.append(device)
             elif label and device['label']:
                 if device['label'].lower() == label.lower():
@@ -106,6 +110,14 @@ class devices(object):
                 rtype = type
         return rtype
 
+    def getDevPath(self, fsname):
+        devPath = ""
+        if os.path.islink(fsname):
+            devPath = os.path.normpath(os.path.join(os.path.dirname(fsname), os.readlink(fsname)))
+        else:
+            devPath = fsname
+        return devPath
+
     ################## INTERNAL FUNCTIONS ###################
 
     def blkDevices(self):
@@ -126,35 +138,49 @@ class devices(object):
                     breed = []
                     breed.append(line)
                 for kid in breed:
-                    entry = {}
-                    entry['fsname'] = kid['name']
-                    entry['label'] = kid['label']
-                    if kid['uuid']:
-                        entry['uuid'] = kid['uuid'].upper()
+                    entry = None
+                    if 'children' in kid:
+                        if (kid['fstype']):
+                            if "lvm" in kid['fstype'].lower(): # logical volume
+                                for gkid in kid['children']:
+                                    entry = self.fillEntry(gkid)
+                                    if entry:
+                                        self.blkdevices.append(entry)
                     else:
-                        entry['uuid'] = ""
-                    entry['type'] = self.tune(kid['fstype'], True)
-                    if entry['type'] == "zfs_member":
-                        # zfs doesn't give all information using lsblk, so make use of df
-                        self.dfGetDevice(entry)
-                    else:
-                        if self.human:
-                            if kid['fssize']:
-                                entry['size'] = kid['fssize'].replace(",",".")
-                            else:
-                                entry['size'] = None
-                            if kid['fsuse%']:
-                                entry['used'] = kid['fsuse%'].replace(",",".")
-                            else:
-                                entry['used'] = None
-                        else:
-                            entry['size'] = kid['fssize']
-                            entry['used'] = kid['fsused']
-                        entry['mountpoint'] = kid["mountpoint"]
-                    entry['mounted'] = True if entry["mountpoint"] else False
-                    self.blkdevices.append(entry)
+                        entry = self.fillEntry(kid)
+                        if entry:
+                            self.blkdevices.append(entry)
         except:
             pass
+
+    def fillEntry(self, devc):
+        entry = {}
+        entry['fsname'] = devc['name']
+        entry['label'] = devc['label']
+        if devc['uuid']:
+            entry['uuid'] = devc['uuid'].upper()
+        else:
+            entry['uuid'] = ""
+        entry['type'] = self.tune(devc['fstype'], True)
+        if entry['type'] == "zfs_member":
+            # zfs doesn't give all information using lsblk, so make use of df
+            self.dfGetDevice(entry)
+        else:
+            if self.human:
+                if devc['fssize']:
+                    entry['size'] = devc['fssize'].replace(",",".")
+                else:
+                    entry['size'] = None
+                if devc['fsuse%']:
+                    entry['used'] = devc['fsuse%'].replace(",",".")
+                else:
+                    entry['used'] = None
+            else:
+                entry['size'] = devc['fssize']
+                entry['used'] = devc['fsused']
+            entry['mountpoint'] = devc["mountpoint"]
+        entry['mounted'] = True if entry["mountpoint"] else False
+        return entry
 
     def dfZfsDevices(self):
         cmd = ""

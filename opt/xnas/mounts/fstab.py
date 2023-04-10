@@ -169,9 +169,12 @@ class fstab(object):
                 changed = changed or entry['fsname'] != fsname
                 entry['fsname'] = fsname
             elif entry["fsname"]:
-                if device:
-                    changed = changed or entry['fsname'] != device['fsname']
-                    entry['fsname'] = device['fsname']
+                if device: # not remote
+                    entryfsname = self.getDevPath(entry['fsname'])
+                    devfsname = self.getDevPath(device['fsname'])
+                    if entryfsname != devfsname:
+                        changed = True
+                        entry['fsname'] = device['fsname']
             else:
                 entry["fsname"] = ""
         elif fsname: # remote
@@ -223,9 +226,12 @@ class fstab(object):
             entry['type'] = self.tuneType(settings['type'])
         elif not "type" in entry:
             changed = True
-            device = self.findDevices(uuid = entry["uuid"], fsname = entry["fsname"], label = entry["label"])
-            if device:
-                entry["type"] = str(device[0]["type"])
+            if not self.remote:
+                device = self.findDevices(uuid = entry["uuid"], fsname = entry["fsname"], label = entry["label"])
+                if device:
+                    entry["type"] = str(device[0]["type"])
+                else:
+                    entry['type'] = "none"
             else:
                 entry['type'] = "none"
         if "options" in settings:
@@ -245,7 +251,8 @@ class fstab(object):
                         ochanged = True
                         break
             if ochanged:
-                options = soptions.extend(self.getExtraOptions(options, True))
+                soptions.extend(self.getExtraOptions(options, True))
+                options = soptions.copy()
                 changed = True
         elif not ("options" in entry or len(entry["options"]) == 0) and not self.remote:
             changed = True
@@ -464,7 +471,6 @@ class fstab(object):
         del ctl
         return retval
 
-
     ################## INTERNAL FUNCTIONS ###################
 
     def getEntryLine(self, uuid = "", fsname = "", label = ""):
@@ -619,7 +625,13 @@ class fstab(object):
                     entryLine = entry['line']
                     break
             elif entry['content']['fsname'] and fsname:
-                if entry['content']['fsname'] == fsname:
+                if not self.remote:
+                    entryfsname = self.getDevPath(entry['content']['fsname'])
+                    infsname = self.getDevPath(fsname)
+                else:
+                    entryfsname = entry['content']['fsname']
+                    infsname = fsname
+                if entryfsname == infsname:
                     entryLine = entry['line']
                     break
             elif entry['content']['label'] and label:
