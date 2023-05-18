@@ -162,6 +162,7 @@ class xnas(xnas_engine):
                  "afenable": "enables or disables autofix (srv) (default = true)",
                  "afretries": "number of retries during autofix (srv) (default = 3)",
                  "afinterval": "autofix retry interval (srv) (default = 60)",
+                 "zfsmntrec": "enables or disables zfs recursive mount (srv) (default = true)",
                  "settings": "lists current settings (srv)"}
         extra = ('xservices run as a service for dynmount, autofix and also handles emptying\n'
         'the cifs recyclebin if required. See "interval", "enable", "removable",\n'
@@ -282,6 +283,7 @@ class xnas(xnas_engine):
             settings["autofixenable"] = True
             settings["autofixretries"] = 3
             settings["autofixinterval"] = 60
+            settings["zfsmountrecursive"] = True
             updated = True
             self.addToGroup(groups.SETTINGS, settings)
 
@@ -332,6 +334,11 @@ class xnas(xnas_engine):
                 afinterval = 60
             if settings["autofixinterval"] != afinterval:
                 settings["autofixinterval"] = afinterval
+                updated = True
+
+        if self.hasSetting(self.settings,"zfsmntrec"):
+            if settings["zfsmountrecursive"] != self.toBool(self.settings["zfsmntrec"]):
+                settings["zfsmountrecursive"] = self.toBool(self.settings["zfsmntrec"])
                 updated = True
 
         if updated or enaupd:
@@ -414,6 +421,8 @@ class xnas(xnas_engine):
         retval = True
 
         retval = self.updateDB1()
+        if retval:
+            retval = self.updateDB2()
 
         return retval
 
@@ -487,6 +496,18 @@ class xnas(xnas_engine):
         self.update()
 
         return retval
+        
+    def updateDB2(self):
+        retval = True
+        settings = self.checkGroup(groups.SETTINGS)
+        if settings:
+            if not "zfsmountrecursive" in settings:
+                settings["zfsmountrecursive"] = True
+        
+        self.update()
+
+        return retval
+        
 #########################################################
 
 ######################### MAIN ##########################

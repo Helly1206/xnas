@@ -188,7 +188,7 @@ class xnas_check(object):
                             break
                     mounted = self.Remotemount.isMounted(entry['mountpoint'])
 
-                    if mount['method'] == "dynmount" and level >= 0:
+                    if mount['method'] == "dynmount" and self.level >= 0:
                         if not mounted:
                             if ping().ping(url):
                                 self.printError(objects.REMOTEMOUNT, key, errors.DYNNOTMOUNTED)

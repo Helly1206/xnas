@@ -76,7 +76,7 @@ class zfs(object):
                     retval = outp.upper().strip()
         return retval
 
-    def mount(self, pool):
+    def mount(self, pool, recursive = True):
         retval = True
         cmd = "zfs mount " + pool
         try:
@@ -85,6 +85,18 @@ class zfs(object):
             self.logger.error("Error mounting ZFS: {}".format(pool))
             self.logger.error(e)
             retval = False
+        if recursive and retval:
+            childFses = self.getMountableChildFilesystems(pool)
+            for childFs in childFses:
+                retval = False
+                cmd = "zfs mount " + childFs
+                try:
+                    shell().command(cmd)
+                    retval = True
+                except Exception as e:
+                    self.logger.error("Error mounting child filesystem {}".format(childFs))
+                    self.logger.error(e)
+                    break
         return retval
 
     def unmount(self, pool):
@@ -431,6 +443,28 @@ class zfs(object):
     def setOpt(self, pool, opt, value):
         cmd = "zfs set {}={} {}".format(opt.lower(), value, pool)
         return shell().command(cmd).lower().strip()
+    
+    #https://docs.oracle.com/cd/E36784_01/html/E36835/gkkra.html#:~:text=If%20you%20want%20to%20mount,after%20the%20system%20is%20booted.
+    def getMountableChildFilesystems(self, filesystemname):
+        cmd = "zfs list -H -o name,canmount,encryption,keylocation -r -t filesystem"
+        lines = []
+        try:
+            lines = shell().command(cmd).splitlines()
+        except Exception as e:
+            self.logger.error("Error getting child filesystems {}".format(filesystemname))
+            self.logger.error(e)
+        childDatasets = []
+        try:
+            for line in lines:
+                vals=line.split("\t")
+                if vals[0].strip().startswith(filesystemname + "/"):
+                    if (vals[1] == "on") and ((vals[2] == "off") or ((vals[2] != "off") and (vals[3] != "prompt"))):
+                        childDatasets.append(vals[0].strip())
+        except Exception as e:
+            self.logger.error("Error parsing child filesystems {}".format(filesystemname))
+            self.logger.error(e)
+        return childDatasets
+    
 """
 #zpool status
 # zfs list

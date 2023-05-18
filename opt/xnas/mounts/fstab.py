@@ -406,7 +406,7 @@ class fstab(object):
                 changed = True
                 self.removeopt(options, "umask")
                 if umask != "0022":
-                    self.setopt(options, "umask", mask)
+                    self.setopt(options, "umask", umask)
         return changed
 
     def restoreFstab(self, backupnr):

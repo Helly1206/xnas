@@ -153,11 +153,11 @@ class nfsshare(object):
                         export['client'] = ip().mask(ip().getMask(self.engine.settings['client']))
                         export['changed'] = True
                     elif newExport:
-                        logger.error("Incorrect IP format, default IP used")
+                        self.logger.error("Incorrect IP format, default IP used")
                         export['client'] = ip().mask(24)
                         export['changed'] = True
                     else:
-                        logger.error("Incorrect IP format, IP not changed")
+                        self.logger.error("Incorrect IP format, IP not changed")
                 elif newExport:
                     export['client'] = ip().mask(24)
                     export['changed'] = True

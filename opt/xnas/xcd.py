@@ -53,7 +53,7 @@ class xcd(xnas_engine):
         folder, filter = self.dir.pd(name, type, self.settings["loc"])
         if not folder:
             if self.settings['json']:
-                printJson(folder)
+                self.printJson(folder)
             else:
                 self.printMarked("Folder not found")
             exit(1)

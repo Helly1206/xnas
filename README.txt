@@ -1,4 +1,4 @@
-XNAS v1.1.0
+XNAS v1.1.1
 
 XNAS -- Extended NAS functionality on a linux computer
 ==== == ======== === ============= == = ===== ========

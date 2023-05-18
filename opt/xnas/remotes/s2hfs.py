@@ -73,7 +73,7 @@ class s2hfs(object):
                     umask = self.umask(access)
                     if val != umask:
                         options.remove(opt)
-                        options.append("{}{}".format(DAVFSFILEOPT, umask))
+                        options.append("{}{}".format(S2HFSUMASK, umask))
                         changed = True
                 except:
                     pass

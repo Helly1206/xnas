@@ -1,3 +1,6 @@
+[B]1.1.1[/B]
+- Added recursive mounting for ZFS (mount child filesystems)
+
 [B]1.1.0[/B]
 - Added support for logical volumes
 - Added support for linked devices in fstab

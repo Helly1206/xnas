@@ -247,7 +247,7 @@ class mount(devices, fstab, mountfs, zfs, mountpoint):
                 if not isMounted:
                     if isZfs:
                         if zfs.available(self):
-                            retval = zfs.mount(self, uuid)
+                            retval = zfs.mount(self, uuid, self.engine.checkKey(groups.SETTINGS,"zfsmountrecursive"))
                         else:
                             self.logger.error("{} is of type zfs, but zfs is not installed".format(name))
                     else:

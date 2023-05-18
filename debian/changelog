@@ -1,3 +1,9 @@
+xnas (1.11) stable; urgency=low
+
+  * Added recursive mounting for ZFS (mount child filesystems)
+
+ -- Helly1206 <hellyrulez@hotmail.com>  Sun, 7 May 2023 19:07:32 +0100
+
 xnas (1.10) stable; urgency=low
 
   * Added support for logical volumes
