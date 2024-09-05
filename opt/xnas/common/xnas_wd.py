@@ -11,30 +11,10 @@ import os
 from remotes.ping import ping
 from mounts.zfs import zfs
 from threading import Lock
-try:
-    from watchdog.observers import Observer
-    from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileDeletedEvent, EVENT_TYPE_CREATED, EVENT_TYPE_DELETED
-    from watchdog.observers.api import EventEmitter, BaseObserver
-except:
-    try:
-        import pip
-        try:
-            package="watchdog"
-            if hasattr(pip, 'main'):
-                pip.main(['install', package])
-            else:
-                pip._internal.main(['install', package])
-        except:
-            print("Unable to install required packages")
-            print("watchdog not installed")
-            exit(1)
-        from watchdog.observers import Observer
-        from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileDeletedEvent, EVENT_TYPE_CREATED, EVENT_TYPE_DELETED
-        from watchdog.observers.api import EventEmitter, BaseObserver
-    except:
-        print("Pip not installed, please install pip to continue")
-        print("Unable to install the required packages")
-        exit(1)
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileDeletedEvent, EVENT_TYPE_CREATED, EVENT_TYPE_DELETED
+from watchdog.observers.api import EventEmitter, BaseObserver
+
 #########################################################
 
 ####################### GLOBALS #########################

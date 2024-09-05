@@ -1,3 +1,9 @@
+xnas (1.12) stable; urgency=low
+
+  * Because pip requires venv from python 3.12, pip removed and apt dependencies added.
+
+ -- Helly1206 <hellyrulez@hotmail.com>  Thu, 5 Sep 2024 11:57:23 +0100
+
 xnas (1.11) stable; urgency=low
 
   * Added recursive mounting for ZFS (mount child filesystems)
